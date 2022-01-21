@@ -13,52 +13,41 @@ OR with [foxx-cli](https://github.com/arangodb/foxx-cli)
 
 example query
 ```
-{
-  "data": {
-    "actorGraph": [
-      {
-        "vertices": [
-          {
-            "personID": "2911f9e2c86647e2fad007009b474dd8",
-            "name": "Jonathan Hyde"
-          },
-          {
-            "movieID": "2",
-            "title": "Jumanji (1995)"
-          }
-        ],
-        "edges": [
-          {
-            "id": "2-2911f9e2c86647e2fad007009b474dd8",
-            "from": "Movie/2",
-            "to": "Person/2911f9e2c86647e2fad007009b474dd8",
-            "rev": "_di8KyM----"
-          }
-        ],
-        "path": {
-          "vertices": [
-            {
-              "personID": "2911f9e2c86647e2fad007009b474dd8",
-              "name": "Jonathan Hyde"
-            },
-            {
-              "movieID": "2",
-              "title": "Jumanji (1995)"
-            }
-          ]
-        }
-      }
-    ],
-    "allMovies": [
-      {
-        "id": "1",
-        "title": "Toy Story (1995)"
-      },
-      {
-        "id": "2",
-        "title": "Jumanji (1995)"
-      }
-    ]
+query {
+  actorGraph(id: "Person/2911f9e2c86647e2fad007009b474dd8") {
+    vertices{
+      ... on Movie {
+      movieID: id
+      title
+    }
+    ... on Person {
+      personID: id
+      name
+    }
+      
+    }
+    edges {
+      id
+      from
+      to
+      rev
+    }
+    path {
+    vertices{
+      ... on Movie {
+      movieID: id
+      title
+    }
+    ... on Person {
+      personID: id
+      name
+    }      
+    }
+  }
+}
+  allMovies (limit: 2) {
+    id 
+    title
   }
 }
 ```
