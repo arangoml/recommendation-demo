@@ -8,17 +8,16 @@ const GraphQLObjectType = graphql.GraphQLObjectType;
 const db = require('@arangodb').db;
 const aql = require("@arangodb").aql;
 
-
 const movieType = new GraphQLObjectType({
     name: "Movie",
     description: "Movie Type",
     fields() {
         return {
             id: {
-                type: new graphql.GraphQLNonNull(GraphQLString),
+                type: GraphQLString,
                 description: "The id of the movie",
                 resolve(movie) {
-                    return movie._key;
+                        return movie._key
                 }
             },
             title: {
@@ -149,6 +148,106 @@ const userType = new GraphQLObjectType({
     }
 })
 
+const edges = new GraphQLObjectType({
+    name: "edges",
+    description: "List of edges in a path or Graph",
+    fields() {
+        return {
+            id: {
+                type: graphql.GraphQLNonNull(GraphQLString),
+                description: "_id value",
+                resolve(source) {
+                    return source._key;
+                }
+            },
+            from: {
+                type: graphql.GraphQLNonNull(GraphQLString),
+                description: "_from value",
+                resolve(source) {
+                    return source._from;
+                },
+            },
+            to: {
+                type: graphql.GraphQLNonNull(GraphQLString),
+                description: "_to value",
+                resolve(source) {
+                    return source._to;
+                },
+            },
+            rev: {
+                type: graphql.GraphQLNonNull(GraphQLString),
+                description: "_rev value",
+                resolve(source) {
+                    return source._rev;
+                }
+            }
+            }
+            }
+})
+
+
+const vertex = new graphql.GraphQLUnionType({
+    name: "vertices",
+    types: [movieType, personType],
+    resolveType(value) {
+        let tokens = value._id.split("/");
+        if (tokens[0] == "Movie") {
+            return movieType;
+        } else if (tokens[0] == "Person"){
+            return personType;
+        }
+    }
+
+})
+
+const arangoGraphType = new GraphQLObjectType({
+    name: 'arangoGraphType',
+    description: "arango graph",
+    fields() {
+        return {
+            vertices: {
+                type: graphql.GraphQLList(vertex),
+                description: 'new vert',
+                resolve(results) {
+                    return results.vertices
+                }
+            },
+            edges: {
+                type: graphql.GraphQLList(edges),
+                description: 'edges',
+                resolve(results) {
+                    return results.edges
+                }
+            },
+            path: {
+                type: new GraphQLObjectType({
+                    name: 'path',
+                    description: 'graph path',
+                    fields() {
+                        return {
+                            edges: {
+                                name: 'pathEdges',
+                                type: graphql.GraphQLList(edges),
+                                resolve(path) {
+                                    return path.edges
+                                }
+                            },
+                            vertices: {
+                                name: 'pathVertices',
+                                type: graphql.GraphQLList(vertex),
+                                resolve(path) {
+                                    return path.vertices
+                                }
+                            }
+                        }
+                    }
+                })
+            }
+        }
+    }
+})
+
+
 var schema = new GraphQLSchema({
     query: new GraphQLObjectType({
       name: 'RootQueryType',
@@ -265,6 +364,22 @@ var schema = new GraphQLSchema({
               ${LIMIT}
               RETURN {'_key': u._key, 'name': u.name}
               `);
+              }
+          },
+          actorGraph: {
+              type: graphql.GraphQLList(arangoGraphType),
+              description: "returns graph of movies actor is in",
+              args: {
+                  id: {
+                    description: "id of actor",
+                    type: graphql.GraphQLNonNull(GraphQLString),
+                  }
+              },
+              resolve(root, args) {
+                  return db._query(aql`
+                  FOR v, e, p IN 1..2 INBOUND ${args.id} hasActor
+                    RETURN {"vertices": p.vertices, "edges": p.edges, "path": p}
+                  `);
               }
           }
       }
