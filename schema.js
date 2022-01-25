@@ -431,30 +431,30 @@ var schema = new GraphQLSchema({
                   const movieRecomendationLimit = args.similarUserLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecomendationLimit} `);
                   return db._query(aql`
               WITH Movie, User, rates
-LET similarUsers =
-    (FOR movie, edge IN 1 OUTBOUND  ${userId}  rates  // eg. userid = Users/1 GRAPH 'movie-knowledge-graph'
-        LET userA_ratings = edge.rating //TO_NUMBER(edge.ratings)
-        FOR userB, edge2 IN 1..1 INBOUND movie rates
-            FILTER userB._id != ${userId}
-            LET userB_ratings = edge2.rating //TO_NUMBER(edge2.ratings)
-            COLLECT userids=userB._id INTO g KEEP userB_ratings, userA_ratings
-            LET userA_len   = SQRT(SUM (FOR r IN g[*].userA_ratings RETURN r*r))
-            LET userB_len   = SQRT(SUM (FOR r IN g[*].userB_ratings RETURN r*r))
-            LET dot_product = SUM (FOR n IN 0..(LENGTH(g[*].userA_ratings) - 1) RETURN g[n].userA_ratings * g[n].userB_ratings)
-            LET cos_sim = dot_product/ (userA_len * userB_len)
-            SORT cos_sim DESC LIMIT ${similarUserLimit}
-            RETURN {userBs: userids,
-                    cosine_similarity: cos_sim}
-    )
-LET userA_RatedMovies = (FOR movie, edge IN 1..1 OUTBOUND ${userId} rates RETURN movie._key)
-FOR userB in similarUsers
-    FOR movie ,ratesEdge IN 1..1 OUTBOUND userB.userBs rates 
-        FILTER movie._key NOT IN userA_RatedMovies
-        COLLECT userA_UnratedMovie = movie
-        AGGREGATE ratingSum = SUM(ratesEdge.rating)  
-        SORT ratingSum DESC
-        LIMIT ${movieRecomendationLimit}
-        RETURN  {movie: userA_UnratedMovie, score : ratingSum} 
+              LET similarUsers =
+                (FOR movie, edge IN 1 OUTBOUND  ${userId}  rates  // eg. userid = Users/1 GRAPH 'movie-knowledge-graph'
+                    LET userA_ratings = edge.rating //TO_NUMBER(edge.ratings)
+                    FOR userB, edge2 IN 1..1 INBOUND movie rates
+                        FILTER userB._id != ${userId}
+                        LET userB_ratings = edge2.rating //TO_NUMBER(edge2.ratings)
+                        COLLECT userids=userB._id INTO g KEEP userB_ratings, userA_ratings
+                        LET userA_len   = SQRT(SUM (FOR r IN g[*].userA_ratings RETURN r*r))
+                        LET userB_len   = SQRT(SUM (FOR r IN g[*].userB_ratings RETURN r*r))
+                        LET dot_product = SUM (FOR n IN 0..(LENGTH(g[*].userA_ratings) - 1) RETURN g[n].userA_ratings * g[n].userB_ratings)
+                        LET cos_sim = dot_product/ (userA_len * userB_len)
+                        SORT cos_sim DESC LIMIT ${similarUserLimit}
+                        RETURN {userBs: userids,
+                              cosine_similarity: cos_sim}
+                )
+            LET userA_RatedMovies = (FOR movie, edge IN 1..1 OUTBOUND ${userId} rates RETURN movie._key)
+            FOR userB in similarUsers
+                FOR movie ,ratesEdge IN 1..1 OUTBOUND userB.userBs rates 
+                    FILTER movie._key NOT IN userA_RatedMovies
+                    COLLECT userA_UnratedMovie = movie
+                    AGGREGATE ratingSum = SUM(ratesEdge.rating)  
+                    SORT ratingSum DESC
+                    LIMIT ${movieRecomendationLimit}
+                    RETURN  {movie: userA_UnratedMovie, score : ratingSum} 
               `);
               }
           }
