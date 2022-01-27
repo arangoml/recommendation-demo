@@ -405,9 +405,62 @@ var schema = new GraphQLSchema({
                   `);
               }
           },
-          recommendMovies: {
+          recommendMoviesCollaborativeFilteringAQL: {
               type: new graphql.GraphQLList(recommendationType),
-              description: "recommend movies using AQL query",
+              description: "recommend movies using Collaborative Filtering implemented in AQL query",
+              args: {
+                  userId: {
+                      description: "_key for a user",
+                      type: GraphQLString,
+                      defaultValue: "User/1"
+                  },
+                  similarUserLimit: {
+                      description: "limit number of similar users considered",
+                      type: GraphQLInt,
+                      defaultValue: 5
+                  },
+                  movieRecomendationLimit: {
+                      description: "limit number of movies recommended",
+                      type: GraphQLInt,
+                      defaultValue: 5
+                  }
+              },
+              resolve(root, args) {
+                  const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
+                  const similarUserLimit = args.similarUserLimit == 0 ? aql.literal(``) : aql.literal(` ${args.similarUserLimit} `);
+                  const movieRecomendationLimit = args.similarUserLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecomendationLimit} `);
+                  return db._query(aql`
+              WITH Movie, User, rates
+              LET similarUsers =
+                (FOR movie, edge IN 1 OUTBOUND  ${userId}  rates  // eg. userid = Users/1 GRAPH 'movie-knowledge-graph'
+                    LET userA_ratings = edge.rating //TO_NUMBER(edge.ratings)
+                    FOR userB, edge2 IN 1..1 INBOUND movie rates
+                        FILTER userB._id != ${userId}
+                        LET userB_ratings = edge2.rating //TO_NUMBER(edge2.ratings)
+                        COLLECT userids=userB._id INTO g KEEP userB_ratings, userA_ratings
+                        LET userA_len   = SQRT(SUM (FOR r IN g[*].userA_ratings RETURN r*r))
+                        LET userB_len   = SQRT(SUM (FOR r IN g[*].userB_ratings RETURN r*r))
+                        LET dot_product = SUM (FOR n IN 0..(LENGTH(g[*].userA_ratings) - 1) RETURN g[n].userA_ratings * g[n].userB_ratings)
+                        LET cos_sim = dot_product/ (userA_len * userB_len)
+                        SORT cos_sim DESC LIMIT ${similarUserLimit}
+                        RETURN {userBs: userids,
+                              cosine_similarity: cos_sim}
+                )
+            LET userA_RatedMovies = (FOR movie, edge IN 1..1 OUTBOUND ${userId} rates RETURN movie._key)
+            FOR userB in similarUsers
+                FOR movie ,ratesEdge IN 1..1 OUTBOUND userB.userBs rates 
+                    FILTER movie._key NOT IN userA_RatedMovies
+                    COLLECT userA_UnratedMovie = movie
+                    AGGREGATE ratingSum = SUM(ratesEdge.rating)  
+                    SORT ratingSum DESC
+                    LIMIT ${movieRecomendationLimit}
+                    RETURN  {movie: userA_UnratedMovie, score : ratingSum} 
+              `);
+              }
+          },
+          recommendMoviesContentBasedML: {
+              type: new graphql.GraphQLList(recommendationType),
+              description: "recommend movies using content based DFIDF inferences accessed in AQL",
               args: {
                   userId: {
                       description: "_key for a user",
