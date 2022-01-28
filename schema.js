@@ -426,7 +426,7 @@ var schema = new GraphQLSchema({
                       type: GraphQLInt,
                       defaultValue: 5
                   },
-                  movieRecomendationLimit: {
+                  movieRecommendationLimit: {
                       description: "limit number of movies recommended",
                       type: GraphQLInt,
                       defaultValue: 5
@@ -435,7 +435,7 @@ var schema = new GraphQLSchema({
               resolve(root, args) {
                   const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
                   const similarUserLimit = args.similarUserLimit == 0 ? aql.literal(``) : aql.literal(` ${args.similarUserLimit} `);
-                  const movieRecomendationLimit = args.movieRecomendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecomendationLimit} `);
+                  const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
                   return db._query(aql`
               WITH Movie, User, rates
               LET similarUsers =
@@ -459,8 +459,8 @@ var schema = new GraphQLSchema({
                     FILTER movie._key NOT IN userA_RatedMovies
                     COLLECT userA_UnratedMovie = movie
                     AGGREGATE ratingSum = SUM(ratesEdge.rating)  
-                    SORT ratingSum DESC
-                    LIMIT ${movieRecomendationLimit}
+                    SORT ratingSum DSC
+                    LIMIT ${movieRecommendationLimit}
                     RETURN  {movie: userA_UnratedMovie, score : ratingSum} 
               `);
               }
@@ -479,7 +479,7 @@ var schema = new GraphQLSchema({
                       type: GraphQLInt,
                       defaultValue: 100
                   },
-                  movieRecomendationLimit: {
+                  movieRecommendationLimit: {
                       description: "limit number of movies recommended",
                       type: GraphQLInt,
                       defaultValue: 5
@@ -488,7 +488,7 @@ var schema = new GraphQLSchema({
               resolve(root, args) {
                   const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
                   const topRatedMovieLimit = args.topRatedMovieLimit == 0 ? aql.literal(``) : aql.literal(` ${args.topRatedMovieLimit} `);
-                  const movieRecomendationLimit = args.movieRecomendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecomendationLimit} `);
+                  const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
                   return db._query(aql`
 WITH Movie
 LET userRatedMovies = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${userId} SORT  ratingEdge.rating DESC RETURN PARSE_IDENTIFIER(ratingEdge._to).key)
@@ -504,8 +504,59 @@ LET userRatedMovies = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${user
         //Aggregate ratings for duplicate similar movies
         COLLECT recommendedMovie = similarMovie.movie AGGREGATE aggregateScore = MAX(compoundScore)
         SORT aggregateScore DESC
-        LIMIT  ${movieRecomendationLimit}
+        LIMIT  ${movieRecommendationLimit}
         RETURN {movie : DOCUMENT("Movie",recommendedMovie) , score : aggregateScore} 
+              `);
+              }
+          },
+          recommendMoviesEmbeddingML: {
+              type: new graphql.GraphQLList(recommendationType),
+              description: "recommend movies using embeddings and similarity inferences accessed in AQL",
+              args: {
+                  userId: {
+                      description: "_key for a user",
+                      type: GraphQLString,
+                      defaultValue: "User/1"
+                  },
+                  topRatedMovieLimit: {
+                      description: "limit number of users top rated movies considered",
+                      type: GraphQLInt,
+                      defaultValue: 100
+                  },
+                  movieRecommendationLimit: {
+                      description: "limit number of movies recommended",
+                      type: GraphQLInt,
+                      defaultValue: 5
+                  }
+              },
+              resolve(root, args) {
+                  const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
+                  const topRatedMovieLimit = args.topRatedMovieLimit == 0 ? aql.literal(``) : aql.literal(` ${args.topRatedMovieLimit} `);
+                  const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
+                  return db._query(aql`
+/*
+This query uses the embedding inference computed using ML and transferred to ArangoDB in similarMovie_Embedding_Inference
+The query works as follows:
+Given a user, what movies are similar to the user's highest rated (topRatedLimit) movies and return the most similar movies the user has not rated.
+*/
+
+LET userRatedMovies = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${userId} SORT  ratingEdge.rating DESC RETURN PARSE_IDENTIFIER(ratingEdge._to).key)
+    FOR ratingEdge IN rates  
+    FILTER ratingEdge._from == ${userId}
+    SORT  ratingEdge.rating DESC 
+    LIMIT ${topRatedMovieLimit} 
+    FOR similarMovieEdge IN similarMovie_Embedding_Inference
+        FILTER similarMovieEdge._from == ratingEdge._to
+        LET similarMovie = similarMovieEdge._to
+        FILTER similarMovie NOT IN userRatedMovies //Don't recommend movies already rated
+        //compound score is user rating factor / distance - talk to data scientist on how to do this in amore scientific way
+        LET compoundScore = (ratingEdge.rating/5.0)/similarMovieEdge.distance
+        //Aggregate ratings for duplicate similar movies
+        COLLECT recommendedMovie = similarMovie AGGREGATE aggregateScore = MAX(compoundScore)
+        SORT aggregateScore DESC
+        FILTER DOCUMENT(recommendedMovie)!=null//Temp Work-around while determine cause of nulls
+        LIMIT  ${movieRecommendationLimit}
+        RETURN {movie : DOCUMENT(recommendedMovie) , score : aggregateScore}
               `);
               }
           }
