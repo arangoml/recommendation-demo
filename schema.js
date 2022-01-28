@@ -83,6 +83,13 @@ const movieType = new GraphQLObjectType({
             backdropPath: {
                 type: GraphQLString,
                 description: "The movie backdrop path"
+            },
+            genres: {
+                type: graphql.GraphQLList(GraphQLString),
+                description: "List of genres",
+                resolve(movie) {
+                    return movie.genres
+                }
             }
         }
     }
