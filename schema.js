@@ -405,9 +405,9 @@ var schema = new GraphQLSchema({
                   `);
               }
           },
-          recommendMovies: {
+          recommendMoviesCollaborativeFilteringAQL: {
               type: new graphql.GraphQLList(recommendationType),
-              description: "recommend movies using AQL query",
+              description: "recommend movies using Collaborative Filtering implemented in AQL query",
               args: {
                   userId: {
                       description: "_key for a user",
@@ -428,7 +428,7 @@ var schema = new GraphQLSchema({
               resolve(root, args) {
                   const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
                   const similarUserLimit = args.similarUserLimit == 0 ? aql.literal(``) : aql.literal(` ${args.similarUserLimit} `);
-                  const movieRecomendationLimit = args.similarUserLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecomendationLimit} `);
+                  const movieRecomendationLimit = args.movieRecomendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecomendationLimit} `);
                   return db._query(aql`
               WITH Movie, User, rates
               LET similarUsers =
@@ -455,6 +455,50 @@ var schema = new GraphQLSchema({
                     SORT ratingSum DESC
                     LIMIT ${movieRecomendationLimit}
                     RETURN  {movie: userA_UnratedMovie, score : ratingSum} 
+              `);
+              }
+          },
+          recommendMoviesContentBasedML: {
+              type: new graphql.GraphQLList(recommendationType),
+              description: "recommend movies using content based DFIDF inferences accessed in AQL",
+              args: {
+                  userId: {
+                      description: "_key for a user",
+                      type: GraphQLString,
+                      defaultValue: "User/1"
+                  },
+                  topRatedMovieLimit: {
+                      description: "limit number of users top rated movies considered",
+                      type: GraphQLInt,
+                      defaultValue: 100
+                  },
+                  movieRecomendationLimit: {
+                      description: "limit number of movies recommended",
+                      type: GraphQLInt,
+                      defaultValue: 5
+                  }
+              },
+              resolve(root, args) {
+                  const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
+                  const topRatedMovieLimit = args.topRatedMovieLimit == 0 ? aql.literal(``) : aql.literal(` ${args.topRatedMovieLimit} `);
+                  const movieRecomendationLimit = args.movieRecomendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecomendationLimit} `);
+                  return db._query(aql`
+WITH Movie
+LET userRatedMovies = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${userId} SORT  ratingEdge.rating DESC RETURN PARSE_IDENTIFIER(ratingEdge._to).key)
+    FOR ratingEdge IN rates  
+    FILTER ratingEdge._from == ${userId}
+    SORT  ratingEdge.rating DESC 
+    LIMIT ${topRatedMovieLimit} 
+    LET similarMovies = DOCUMENT("MovieSimilarityTFIDF",PARSE_IDENTIFIER(ratingEdge._to).key)
+    FOR similarMovie IN similarMovies.similarMovies
+        FILTER similarMovie NOT IN userRatedMovies //Don't recommend movies already rated
+        //compound score is user rating factor * DFIDF similar movie score
+        LET compoundScore = similarMovie.score*ratingEdge.rating/5.0 
+        //Aggregate ratings for duplicate similar movies
+        COLLECT recommendedMovie = similarMovie.movie AGGREGATE aggregateScore = MAX(compoundScore)
+        SORT aggregateScore DESC
+        LIMIT  ${movieRecomendationLimit}
+        RETURN {movie : DOCUMENT("Movie",recommendedMovie) , score : aggregateScore} 
               `);
               }
           }
