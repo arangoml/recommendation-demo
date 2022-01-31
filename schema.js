@@ -459,7 +459,7 @@ var schema = new GraphQLSchema({
                     FILTER movie._key NOT IN userA_RatedMovies
                     COLLECT userA_UnratedMovie = movie
                     AGGREGATE ratingSum = SUM(ratesEdge.rating)  
-                    SORT ratingSum DSC
+                    SORT ratingSum DESC
                     LIMIT ${movieRecommendationLimit}
                     RETURN  {movie: userA_UnratedMovie, score : ratingSum} 
               `);
