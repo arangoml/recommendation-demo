@@ -8,6 +8,35 @@ const GraphQLObjectType = graphql.GraphQLObjectType;
 const db = require('@arangodb').db;
 const aql = require("@arangodb").aql;
 
+//Movie Conceptual Model
+const classType = new GraphQLObjectType({
+    name: "Class",
+    description: "Class type",
+    fields() {
+        return {
+            id: {
+                type: new graphql.GraphQLNonNull(GraphQLString),
+                description: "The id of a Class",
+                resolve(genre) {
+                    return genre._key;
+                }
+            },
+            name: {
+                type: GraphQLString,
+                description: "The Class name"
+            },
+            description: {
+                type: GraphQLString,
+                description: "The Class description"
+            },
+            collection :{
+                type : GraphQLString,
+                description: "The collection corresponding the class"
+            }
+
+        }
+    }
+})
 const movieType = new GraphQLObjectType({
     name: "Movie",
     description: "Movie Type",
@@ -90,6 +119,30 @@ const movieType = new GraphQLObjectType({
                 resolve(movie) {
                     return movie.genres
                 }
+            }
+        }
+    }
+})
+
+const genreType = new GraphQLObjectType({
+    name: "Genre",
+    description: "Movie genres type",
+    fields() {
+        return {
+            id: {
+                type: new graphql.GraphQLNonNull(GraphQLString),
+                description: "The id of a movie genre",
+                resolve(genre) {
+                    return genre._key;
+                }
+            },
+            name: {
+                type: GraphQLString,
+                description: "The genre name"
+            },
+            description: {
+                type: GraphQLString,
+                description: "The genre description"
             }
         }
     }
@@ -287,6 +340,33 @@ var schema = new GraphQLSchema({
             return 'world';
           }
         },
+          allClasses: {
+              type: new graphql.GraphQLList(classType),
+              description: "Classes",
+              args: {
+                  id: {
+                      description: "_key for a class",
+                      type: GraphQLString,
+                      defaultValue: ""
+                  },
+                  limit: {
+                      description: "limit number of results",
+                      type: GraphQLInt,
+                      defaultValue: 0
+                  }
+              },
+              resolve(root, args) {
+                  const FILTER = args.id == "" ? aql.literal(``) : aql.literal(` FILTER c._key == "${args.id}" `);
+                  const LIMIT = args.limit == 0 ? aql.literal(``) : aql.literal(` LIMIT ${args.limit} `);
+
+                  return db._query(aql`
+              FOR c IN Class
+              ${FILTER}
+              ${LIMIT}
+              RETURN {'_key': c._key, 'name': c.name, 'description': c.description, 'collection' : c.collection}
+              `);
+              }
+          },
         allMovies: {
             type: new graphql.GraphQLList(movieType),
             description: "movies",
@@ -338,6 +418,33 @@ var schema = new GraphQLSchema({
               ${FILTER}
               ${LIMIT}
               RETURN {'_key': c._key, 'name': c.name}
+              `);
+              }
+          },
+          allGenres: {
+              type: new graphql.GraphQLList(genreType),
+              description: "genres",
+              args: {
+                  id: {
+                      description: "_key for a genre",
+                      type: GraphQLString,
+                      defaultValue: ""
+                  },
+                  limit: {
+                      description: "limit number of results",
+                      type: GraphQLInt,
+                      defaultValue: 0
+                  }
+              },
+              resolve(root, args) {
+                  const FILTER = args.id == "" ? aql.literal(``) : aql.literal(` FILTER g._key == "${args.id}" `);
+                  const LIMIT = args.limit == 0 ? aql.literal(``) : aql.literal(` LIMIT ${args.limit} `);
+
+                  return db._query(aql`
+              FOR g IN Genre
+              ${FILTER}
+              ${LIMIT}
+              RETURN {'_key': g._key, 'name': g.name, 'description' : g.description}
               `);
               }
           },
@@ -467,7 +574,7 @@ var schema = new GraphQLSchema({
           },
           recommendMoviesContentBasedML: {
               type: new graphql.GraphQLList(recommendationType),
-              description: "recommend movies using content based DFIDF inferences accessed in AQL",
+              description: "recommend movies using content based TFIDF inferences accessed in AQL",
               args: {
                   userId: {
                       description: "_key for a user",
@@ -500,7 +607,7 @@ LET userRatedMovies = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${user
     FILTER similarMovies != null
     FOR similarMovie IN similarMovies.similarMovies
         FILTER similarMovie NOT IN userRatedMovies //Don't recommend movies already rated
-        //compound score is user rating factor * DFIDF similar movie score
+        //compound score is user rating factor * TFIDF similar movie score
         LET compoundScore = similarMovie.score*ratingEdge.rating/5.0 
         //Aggregate ratings for duplicate similar movies
         COLLECT recommendedMovie = similarMovie.movie AGGREGATE aggregateScore = MAX(compoundScore)
