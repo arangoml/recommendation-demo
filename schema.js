@@ -497,6 +497,7 @@ LET userRatedMovies = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${user
     SORT  ratingEdge.rating DESC 
     LIMIT ${topRatedMovieLimit} 
     LET similarMovies = DOCUMENT("MovieSimilarityTFIDF",PARSE_IDENTIFIER(ratingEdge._to).key)
+    FILTER similarMovies != null
     FOR similarMovie IN similarMovies.similarMovies
         FILTER similarMovie NOT IN userRatedMovies //Don't recommend movies already rated
         //compound score is user rating factor * DFIDF similar movie score
