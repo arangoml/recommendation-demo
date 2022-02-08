@@ -220,19 +220,27 @@ const edges = new GraphQLObjectType({
                     return source._key;
                 }
             },
+            name: {
+                type: graphql.GraphQLNonNull(GraphQLString),
+                description: "name of edge",
+                resolve(source) {
+                    if (source.name ==null)  return source._id.split("/")[0];
+                    else return source.name;
+                }
+            },
             from: {
                 type: graphql.GraphQLNonNull(GraphQLString),
                 description: "_from value",
                 resolve(source) {
                     return source._from;
-                },
+                }
             },
             to: {
                 type: graphql.GraphQLNonNull(GraphQLString),
                 description: "_to value",
                 resolve(source) {
                     return source._to;
-                },
+                }
             },
             rev: {
                 type: graphql.GraphQLNonNull(GraphQLString),
@@ -247,8 +255,9 @@ const edges = new GraphQLObjectType({
 
 
 const vertex = new graphql.GraphQLUnionType({
-    name: "list of vertices in a path or graph",
-    types: [movieType, personType, classType],
+    name: "vertices",
+    description: "list of vertices in a path or graph",
+    types: [movieType, personType, userType, classType],
     resolveType(value) {
         let tokens = value._id.split("/");
         if (tokens[0] == "Movie") {
@@ -256,9 +265,11 @@ const vertex = new graphql.GraphQLUnionType({
         } else if (tokens[0] == "Person"){
             return personType;
         }else if (tokens[0] == "Class"){
-            return classType;}
+            return classType;
+        }else if (tokens[0] == "User"){
+            return userType;
+        }
     }
-
 })
 
 const arangoGraphType = new GraphQLObjectType({
@@ -375,8 +386,13 @@ var schema = new GraphQLSchema({
               },
               resolve(root, args) {
                   return db._query(aql`
-              RETURN{vertices : (FOR class IN Class RETURN class), 
-                     edges : (for rel in Relation RETURN rel)}
+              RETURN{
+                vertices : (FOR class IN Class RETURN class), 
+                edges : UNION((for rel in Relation RETURN rel),
+                              (for rel in type RETURN rel),
+                              (for rel in subClassOf RETURN rel)
+                        )
+                    } 
               `);
               }
           },
