@@ -247,15 +247,16 @@ const edges = new GraphQLObjectType({
 
 
 const vertex = new graphql.GraphQLUnionType({
-    name: "vertices",
-    types: [movieType, personType],
+    name: "list of vertices in a path or graph",
+    types: [movieType, personType, classType],
     resolveType(value) {
         let tokens = value._id.split("/");
         if (tokens[0] == "Movie") {
             return movieType;
         } else if (tokens[0] == "Person"){
             return personType;
-        }
+        }else if (tokens[0] == "Class"){
+            return classType;}
     }
 
 })
@@ -267,7 +268,7 @@ const arangoGraphType = new GraphQLObjectType({
         return {
             vertices: {
                 type: graphql.GraphQLList(vertex),
-                description: 'new vert',
+                description: 'vertices',
                 resolve(results) {
                     return results.vertices
                 }
@@ -364,6 +365,18 @@ var schema = new GraphQLSchema({
               ${FILTER}
               ${LIMIT}
               RETURN {'_key': c._key, 'name': c.name, 'description': c.description, 'collection' : c.collection}
+              `);
+              }
+          },
+          ontologyGraph: {
+              type: new graphql.GraphQLList(arangoGraphType),
+              description: "Ontology",
+              args: {
+              },
+              resolve(root, args) {
+                  return db._query(aql`
+              RETURN{vertices : (FOR class IN Class RETURN class), 
+                     edges : (for rel in Relation RETURN rel)}
               `);
               }
           },
