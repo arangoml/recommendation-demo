@@ -17,8 +17,8 @@ const classType = new GraphQLObjectType({
             id: {
                 type: new graphql.GraphQLNonNull(GraphQLString),
                 description: "The id of a Class",
-                resolve(genre) {
-                    return genre._key;
+                resolve(c) {
+                    return c._key;
                 }
             },
             name: {
@@ -37,6 +37,42 @@ const classType = new GraphQLObjectType({
         }
     }
 })
+
+const modelType = new GraphQLObjectType({
+    name: "Model",
+    description: "Model type",
+    fields() {
+        return {
+            id: {
+                type: new graphql.GraphQLNonNull(GraphQLString),
+                description: "The id of a Model",
+                resolve(model) {
+                    return model._key;
+                }
+            },
+            name: {
+                type: GraphQLString,
+                description: "The Model name"
+            },
+            description: {
+                type: GraphQLString,
+                description: "The Model description"
+            },
+            function: {
+                type: GraphQLString,
+                description: "The Model function"
+            },
+            components: {
+                type: graphql.GraphQLList(GraphQLString),
+                description: "List of analytic and ML components in model",
+                resolve(m) {
+                    return m.components
+                }
+            }
+        }
+    }
+})
+
 const movieType = new GraphQLObjectType({
     name: "Movie",
     description: "Movie Type",
@@ -96,10 +132,6 @@ const movieType = new GraphQLObjectType({
             runtime: {
                 type: GraphQLInt,
                 description: "The movie runtime in minutes"
-            },
-            releaseDate: {
-                type: GraphQLString,
-                description: "The movie releaseDate"
             },
             tagline: {
                 type: GraphQLString,
@@ -220,19 +252,27 @@ const edges = new GraphQLObjectType({
                     return source._key;
                 }
             },
+            name: {
+                type: graphql.GraphQLNonNull(GraphQLString),
+                description: "name of edge",
+                resolve(source) {
+                    if (source.name ==null)  return source._id.split("/")[0];
+                    else return source.name;
+                }
+            },
             from: {
                 type: graphql.GraphQLNonNull(GraphQLString),
                 description: "_from value",
                 resolve(source) {
                     return source._from;
-                },
+                }
             },
             to: {
                 type: graphql.GraphQLNonNull(GraphQLString),
                 description: "_to value",
                 resolve(source) {
                     return source._to;
-                },
+                }
             },
             rev: {
                 type: graphql.GraphQLNonNull(GraphQLString),
@@ -248,16 +288,20 @@ const edges = new GraphQLObjectType({
 
 const vertex = new graphql.GraphQLUnionType({
     name: "vertices",
-    types: [movieType, personType],
+    description: "list of vertices in a path or graph",
+    types: [movieType, personType, userType, classType],
     resolveType(value) {
         let tokens = value._id.split("/");
         if (tokens[0] == "Movie") {
             return movieType;
         } else if (tokens[0] == "Person"){
             return personType;
+        }else if (tokens[0] == "Class"){
+            return classType;
+        }else if (tokens[0] == "User"){
+            return userType;
         }
     }
-
 })
 
 const arangoGraphType = new GraphQLObjectType({
@@ -267,7 +311,7 @@ const arangoGraphType = new GraphQLObjectType({
         return {
             vertices: {
                 type: graphql.GraphQLList(vertex),
-                description: 'new vert',
+                description: 'vertices',
                 resolve(results) {
                     return results.vertices
                 }
@@ -364,6 +408,50 @@ var schema = new GraphQLSchema({
               ${FILTER}
               ${LIMIT}
               RETURN {'_key': c._key, 'name': c.name, 'description': c.description, 'collection' : c.collection}
+              `);
+              }
+          },
+          allModels: {
+              type: new graphql.GraphQLList(modelType),
+              description: "Models",
+              args: {
+                  id: {
+                      description: "_key for a model",
+                      type: GraphQLString,
+                      defaultValue: ""
+                  },
+                  limit: {
+                      description: "limit number of results",
+                      type: GraphQLInt,
+                      defaultValue: 0
+                  }
+              },
+              resolve(root, args) {
+                  const FILTER = args.id == "" ? aql.literal(``) : aql.literal(` FILTER m._key == "${args.id}" `);
+                  const LIMIT = args.limit == 0 ? aql.literal(``) : aql.literal(` LIMIT ${args.limit} `);
+
+                  return db._query(aql`
+              FOR m IN Model
+              ${FILTER}
+              ${LIMIT}
+              RETURN {'_key': m._key, 'name': m.name, 'description': m.description, 'function' : m.function, 'components':m.components}
+              `);
+              }
+          },
+          ontologyGraph: {
+              type: new graphql.GraphQLList(arangoGraphType),
+              description: "Ontology",
+              args: {
+              },
+              resolve(root, args) {
+                  return db._query(aql`
+              RETURN{
+                vertices : (FOR class IN Class RETURN class), 
+                edges : UNION((for rel in Relation RETURN rel),
+                              (for rel in type RETURN rel),
+                              (for rel in subClassOf RETURN rel)
+                        )
+                    } 
               `);
               }
           },
