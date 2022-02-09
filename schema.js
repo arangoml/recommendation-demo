@@ -705,6 +705,74 @@ LET userRatedMovies = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${user
               `);
               }
           },
+          explainRecommendMoviesContentBasedML: {
+              type: new graphql.GraphQLList(arangoGraphType),
+              description: "recommend movies using content based TFIDF inferences accessed in AQL",
+              args: {
+                  userId: {
+                      description: "_key for a user",
+                      type: GraphQLString,
+                      defaultValue: "User/1"
+                  },
+                  movieId: {
+                      description: "_key for a recommended Movie",
+                      type: GraphQLString,
+                      defaultValue: "Movie/761"
+                  },
+                  pathLimit: {
+                      description: "limit number of explanation  paths",
+                      type: GraphQLInt,
+                      defaultValue: 1
+                  }
+              },
+              resolve(root, args) {
+                  const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
+                  const movieId = args.movieId == "" ? aql.literal(``) : aql.literal(` "${args.movieId}" `);
+                  const pathLimit = args.pathLimit == 0 ? aql.literal(``) : aql.literal(` ${args.pathLimit} `);
+                  return db._query(aql`
+       FOR path IN INBOUND K_SHORTEST_PATHS ${movieId} TO ${userId} rates,  similarMovie_TFIDF_ML_Inference
+       OPTIONS {
+        weightAttribute: 'distance',
+        defaultWeight: 1}
+        LIMIT ${pathLimit}
+        RETURN path
+              `);
+              }
+          },
+          explainRecommendMoviesEmbeddingML: {
+              type: new graphql.GraphQLList(arangoGraphType),
+              description: "recommend movies using content based TFIDF inferences accessed in AQL",
+              args: {
+                  userId: {
+                      description: "_key for a user",
+                      type: GraphQLString,
+                      defaultValue: "User/1"
+                  },
+                  movieId: {
+                      description: "_key for a recommended Movie",
+                      type: GraphQLString,
+                      defaultValue: "Movie/8125"
+                  },
+                  pathLimit: {
+                      description: "limit number of explanation  paths",
+                      type: GraphQLInt,
+                      defaultValue: 1
+                  }
+              },
+              resolve(root, args) {
+                  const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
+                  const movieId = args.movieId == "" ? aql.literal(``) : aql.literal(` "${args.movieId}" `);
+                  const pathLimit = args.pathLimit == 0 ? aql.literal(``) : aql.literal(` ${args.pathLimit} `);
+                  return db._query(aql`
+       FOR path IN INBOUND K_SHORTEST_PATHS ${movieId} TO ${userId} rates,  similarMovie_Embedding_Inference
+       OPTIONS {
+        weightAttribute: 'distance',
+        defaultWeight: 1}
+        LIMIT ${pathLimit}
+        RETURN path
+              `);
+              }
+          },
           recommendMoviesEmbeddingML: {
               type: new graphql.GraphQLList(recommendationType),
               description: "recommend movies using embeddings and similarity inferences accessed in AQL",
