@@ -17,8 +17,8 @@ const classType = new GraphQLObjectType({
             id: {
                 type: new graphql.GraphQLNonNull(GraphQLString),
                 description: "The id of a Class",
-                resolve(genre) {
-                    return genre._key;
+                resolve(c) {
+                    return c._key;
                 }
             },
             name: {
@@ -37,6 +37,42 @@ const classType = new GraphQLObjectType({
         }
     }
 })
+
+const modelType = new GraphQLObjectType({
+    name: "Model",
+    description: "Model type",
+    fields() {
+        return {
+            id: {
+                type: new graphql.GraphQLNonNull(GraphQLString),
+                description: "The id of a Model",
+                resolve(model) {
+                    return model._key;
+                }
+            },
+            name: {
+                type: GraphQLString,
+                description: "The Model name"
+            },
+            description: {
+                type: GraphQLString,
+                description: "The Model description"
+            },
+            function: {
+                type: GraphQLString,
+                description: "The Model function"
+            },
+            components: {
+                type: graphql.GraphQLList(GraphQLString),
+                description: "List of analytic and ML components in model",
+                resolve(m) {
+                    return m.components
+                }
+            }
+        }
+    }
+})
+
 const movieType = new GraphQLObjectType({
     name: "Movie",
     description: "Movie Type",
@@ -96,10 +132,6 @@ const movieType = new GraphQLObjectType({
             runtime: {
                 type: GraphQLInt,
                 description: "The movie runtime in minutes"
-            },
-            releaseDate: {
-                type: GraphQLString,
-                description: "The movie releaseDate"
             },
             tagline: {
                 type: GraphQLString,
@@ -376,6 +408,33 @@ var schema = new GraphQLSchema({
               ${FILTER}
               ${LIMIT}
               RETURN {'_key': c._key, 'name': c.name, 'description': c.description, 'collection' : c.collection}
+              `);
+              }
+          },
+          allModels: {
+              type: new graphql.GraphQLList(modelType),
+              description: "Models",
+              args: {
+                  id: {
+                      description: "_key for a model",
+                      type: GraphQLString,
+                      defaultValue: ""
+                  },
+                  limit: {
+                      description: "limit number of results",
+                      type: GraphQLInt,
+                      defaultValue: 0
+                  }
+              },
+              resolve(root, args) {
+                  const FILTER = args.id == "" ? aql.literal(``) : aql.literal(` FILTER m._key == "${args.id}" `);
+                  const LIMIT = args.limit == 0 ? aql.literal(``) : aql.literal(` LIMIT ${args.limit} `);
+
+                  return db._query(aql`
+              FOR m IN Model
+              ${FILTER}
+              ${LIMIT}
+              RETURN {'_key': m._key, 'name': m.name, 'description': m.description, 'function' : m.function, 'components':m.components}
               `);
               }
           },
