@@ -659,8 +659,7 @@ var schema = new GraphQLSchema({
                     RETURN  {movie: userA_UnratedMovie, score : ratingSum} 
               `);
               }
-          },
-          recommendMoviesContentBasedML: {
+          },          recommendMoviesContentBasedML: {
               type: new graphql.GraphQLList(recommendationType),
               description: "recommend movies using content based TFIDF inferences accessed in AQL",
               args: {
@@ -685,23 +684,29 @@ var schema = new GraphQLSchema({
                   const topRatedMovieLimit = args.topRatedMovieLimit == 0 ? aql.literal(``) : aql.literal(` ${args.topRatedMovieLimit} `);
                   const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
                   return db._query(aql`
-WITH Movie
-LET userRatedMovies = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${userId} SORT  ratingEdge.rating DESC RETURN PARSE_IDENTIFIER(ratingEdge._to).key)
+/*
+This query uses the TFIDF inference computed using ML and transferred to ArangoDB in similarMovie_TFIDF_ML_Inference edge collection
+The query works as follows:
+Given a user, what movies are similar to the user's highest rated (topRatedLimit) movies and return the most similar movies the user has not rated.
+*/
+
+LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${userId} SORT  ratingEdge.rating DESC RETURN PARSE_IDENTIFIER(ratingEdge._to).key)
     FOR ratingEdge IN rates  
-    FILTER ratingEdge._from == ${userId}
+    FILTER ratingEdge._from == ${userId} 
     SORT  ratingEdge.rating DESC 
     LIMIT ${topRatedMovieLimit} 
-    LET similarMovies = DOCUMENT("MovieSimilarityTFIDF",PARSE_IDENTIFIER(ratingEdge._to).key)
-    FILTER similarMovies != null
-    FOR similarMovie IN similarMovies.similarMovies
-        FILTER similarMovie NOT IN userRatedMovies //Don't recommend movies already rated
+   LET similarMovieEdges = (FOR similarMovieEdge IN similarMovie_TFIDF_ML_Inference FILTER similarMovieEdge._from==ratingEdge._to RETURN similarMovieEdge)
+   FILTER similarMovieEdges != null
+    FOR similarMovieEdge IN similarMovieEdges
+        FILTER PARSE_IDENTIFIER(similarMovieEdge._to).key NOT IN userRatedMovieKeys //Don't recommend movies already rated
         //compound score is user rating factor * TFIDF similar movie score
-        LET compoundScore = similarMovie.score*ratingEdge.rating/5.0 
-        //Aggregate ratings for duplicate similar movies
-        COLLECT recommendedMovie = similarMovie.movie AGGREGATE aggregateScore = MAX(compoundScore)
+        LET compoundScore = similarMovieEdge.score*ratingEdge.rating/5.0 
+        //Aggregate ratings for duplicate similar movies for user-rated movie
+        COLLECT recommendedMovieId = similarMovieEdge._to AGGREGATE aggregateScore = MAX(compoundScore)
+        //Recommended movies with the highest compound score
         SORT aggregateScore DESC
         LIMIT  ${movieRecommendationLimit}
-        RETURN {movie : DOCUMENT("Movie",recommendedMovie) , score : aggregateScore} 
+        RETURN {movie : DOCUMENT(recommendedMovieId) , score : aggregateScore} 
               `);
               }
           },
