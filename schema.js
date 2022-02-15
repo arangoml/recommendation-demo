@@ -659,7 +659,42 @@ var schema = new GraphQLSchema({
                     RETURN  {movie: userA_UnratedMovie, score : ratingSum} 
               `);
               }
-          },          recommendMoviesContentBasedML: {
+          },
+          explainRecommendMoviesCollaborativeFilteringAQL: {
+              type: new graphql.GraphQLList(arangoGraphType),
+              description: "recommend movies using content based TFIDF inferences accessed in AQL",
+              args: {
+                  userId: {
+                      description: "_key for a user",
+                      type: GraphQLString,
+                      defaultValue: "User/1"
+                  },
+                  movieId: {
+                      description: "_key for a recommended Movie",
+                      type: GraphQLString,
+                      defaultValue: "Movie/58559"
+                  },
+                  pathLimit: {
+                      description: "limit number of explanation  paths",
+                      type: GraphQLInt,
+                      defaultValue: 1
+                  }
+              },
+              resolve(root, args) {
+                  const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
+                  const movieId = args.movieId == "" ? aql.literal(``) : aql.literal(` "${args.movieId}" `);
+                  const pathLimit = args.pathLimit == 0 ? aql.literal(``) : aql.literal(` ${args.pathLimit} `);
+                  return db._query(aql`
+       FOR path IN INBOUND K_SHORTEST_PATHS ${movieId} TO ${userId} ANY rates
+       OPTIONS {
+        weightAttribute: 'distance',
+        defaultWeight: 1}
+        LIMIT ${pathLimit}
+        RETURN path
+              `);
+              }
+          },
+          recommendMoviesContentBasedML: {
               type: new graphql.GraphQLList(recommendationType),
               description: "recommend movies using content based TFIDF inferences accessed in AQL",
               args: {
