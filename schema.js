@@ -151,6 +151,13 @@ const movieType = new GraphQLObjectType({
                 resolve(movie) {
                     return movie.genres
                 }
+            },
+            voteAverage: {
+                type: GraphQLFloat,
+                description: "Average user voting score",
+                resolve(movie) {
+                    return movie.voteAverage
+                }
             }
         }
     }
