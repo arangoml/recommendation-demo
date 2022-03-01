@@ -18,6 +18,13 @@ const classType = new GraphQLObjectType({
                 type: new graphql.GraphQLNonNull(GraphQLString),
                 description: "The id of a Class",
                 resolve(c) {
+                    return c._id;
+                }
+            },
+            key: {
+                type: new graphql.GraphQLNonNull(GraphQLString),
+                description: "The key of a Class",
+                resolve(c) {
                     return c._key;
                 }
             },
@@ -47,6 +54,13 @@ const modelType = new GraphQLObjectType({
                 type: new graphql.GraphQLNonNull(GraphQLString),
                 description: "The id of a Model",
                 resolve(model) {
+                    return model._id;
+                }
+            },
+            key: {
+                type: new graphql.GraphQLNonNull(GraphQLString),
+                description: "The key of a Model",
+                resolve(model) {
                     return model._key;
                 }
             },
@@ -57,6 +71,10 @@ const modelType = new GraphQLObjectType({
             description: {
                 type: GraphQLString,
                 description: "The Model description"
+            },
+            query: {
+                type: GraphQLString,
+                description: "The Model AQL Query implementation"
             },
             function: {
                 type: GraphQLString,
@@ -82,7 +100,14 @@ const movieType = new GraphQLObjectType({
                 type: GraphQLString,
                 description: "The id of the movie",
                 resolve(movie) {
-                        return movie._key
+                        return movie._id
+                }
+            },
+            key: {
+                type: GraphQLString,
+                description: "The key of the movie",
+                resolve(movie) {
+                    return movie._key
                 }
             },
             title: {
@@ -165,6 +190,13 @@ const genreType = new GraphQLObjectType({
                 type: new graphql.GraphQLNonNull(GraphQLString),
                 description: "The id of a movie genre",
                 resolve(genre) {
+                    return genre._id;
+                }
+            },
+            key: {
+                type: new graphql.GraphQLNonNull(GraphQLString),
+                description: "The key of a movie genre",
+                resolve(genre) {
                     return genre._key;
                 }
             },
@@ -189,6 +221,13 @@ const personType = new GraphQLObjectType({
                 type: new graphql.GraphQLNonNull(GraphQLString),
                 description: "The id of a person associated with movies",
                 resolve(person) {
+                    return person._id;
+                }
+            },
+            key: {
+                type: new graphql.GraphQLNonNull(GraphQLString),
+                description: "The key of a person associated with movies",
+                resolve(person) {
                     return person._key;
                 }
             },
@@ -208,6 +247,13 @@ const companyType = new GraphQLObjectType({
             id: {
                 type: new graphql.GraphQLNonNull(GraphQLString),
                 description: "The id of a company associated with movies",
+                resolve(company) {
+                    return company._id;
+                }
+            },
+            key: {
+                type: new graphql.GraphQLNonNull(GraphQLString),
+                description: "The key of a company associated with movies",
                 resolve(company) {
                     return company._key;
                 }
@@ -229,6 +275,13 @@ const userType = new GraphQLObjectType({
                 type: new graphql.GraphQLNonNull(GraphQLString),
                 description: "The id of a movie user",
                 resolve(user) {
+                    return user._id;
+                }
+            },
+            key: {
+                type: new graphql.GraphQLNonNull(GraphQLString),
+                description: "The key of a movie user",
+                resolve(user) {
                     return user._key;
                 }
             },
@@ -247,7 +300,14 @@ const edges = new GraphQLObjectType({
         return {
             id: {
                 type: graphql.GraphQLNonNull(GraphQLString),
-                description: "_id value",
+                description: "edge id value",
+                resolve(source) {
+                    return source._id;
+                }
+            },
+            key: {
+                type: graphql.GraphQLNonNull(GraphQLString),
+                description: "edge key value",
                 resolve(source) {
                     return source._key;
                 }
@@ -280,6 +340,20 @@ const edges = new GraphQLObjectType({
                 resolve(source) {
                     return source._rev;
                 }
+            },
+            rating: {
+                type: GraphQLInt,
+                description: "User movie rating",
+                resolve(source) {
+                    return source.rating;
+                }
+            },
+            distance: {
+                type: GraphQLFloat,
+                description: "User-rates-Movie and Movie-hasSimilarMovie-Movie Edge distance",
+                resolve(source) {
+                    return source.distance;
+                }
             }
             }
             }
@@ -306,7 +380,7 @@ const vertex = new graphql.GraphQLUnionType({
 
 const arangoGraphType = new GraphQLObjectType({
     name: 'arangoGraphType',
-    description: "arango graph",
+    description: "Arango graph",
     fields() {
         return {
             vertices: {
@@ -389,25 +463,25 @@ var schema = new GraphQLSchema({
               description: "Classes",
               args: {
                   id: {
-                      description: "_key for a class",
+                      description: "The id of a class",
                       type: GraphQLString,
                       defaultValue: ""
                   },
                   limit: {
                       description: "limit number of results",
                       type: GraphQLInt,
-                      defaultValue: 0
+                      defaultValue: 20
                   }
               },
               resolve(root, args) {
-                  const FILTER = args.id == "" ? aql.literal(``) : aql.literal(` FILTER c._key == "${args.id}" `);
+                  const FILTER = args.id == "" ? aql.literal(``) : aql.literal(` FILTER c._id == "${args.id}" `);
                   const LIMIT = args.limit == 0 ? aql.literal(``) : aql.literal(` LIMIT ${args.limit} `);
 
                   return db._query(aql`
               FOR c IN Class
               ${FILTER}
               ${LIMIT}
-              RETURN {'_key': c._key, 'name': c.name, 'description': c.description, 'collection' : c.collection}
+              RETURN {'_id': c._id, 'name': c.name, 'description': c.description, 'collection' : c.collection}
               `);
               }
           },
@@ -416,25 +490,25 @@ var schema = new GraphQLSchema({
               description: "Models",
               args: {
                   id: {
-                      description: "_key for a model",
+                      description: "_id for a model",
                       type: GraphQLString,
                       defaultValue: ""
                   },
                   limit: {
                       description: "limit number of results",
                       type: GraphQLInt,
-                      defaultValue: 0
+                      defaultValue: 5
                   }
               },
               resolve(root, args) {
-                  const FILTER = args.id == "" ? aql.literal(``) : aql.literal(` FILTER m._key == "${args.id}" `);
+                  const FILTER = args.id == "" ? aql.literal(``) : aql.literal(` FILTER m._id == "${args.id}" `);
                   const LIMIT = args.limit == 0 ? aql.literal(``) : aql.literal(` LIMIT ${args.limit} `);
 
                   return db._query(aql`
               FOR m IN Model
               ${FILTER}
               ${LIMIT}
-              RETURN {'_key': m._key, 'name': m.name, 'description': m.description, 'function' : m.function, 'components':m.components}
+              RETURN {'_id': m._id, 'name': m.name, 'description': m.description, 'query': m.query, 'function' : m.function, 'components':m.components}
               `);
               }
           },
@@ -446,10 +520,15 @@ var schema = new GraphQLSchema({
               resolve(root, args) {
                   return db._query(aql`
               RETURN{
-                vertices : (FOR class IN Class RETURN class), 
-                edges : UNION((for rel in Relation RETURN rel),
+                vertices : UNION((FOR v IN Class RETURN v),
+                                  (FOR v IN DatatypeProperty RETURN v),
+                                  (FOR v IN ObjectProperty RETURN v),
+                                  (FOR v IN Property RETURN v)), 
+                edges : UNION((for rel in domain RETURN rel),
+                               (for rel in range RETURN rel),
                               (for rel in type RETURN rel),
-                              (for rel in subClassOf RETURN rel)
+                              (for rel in subClassOf RETURN rel),
+                              (for rel in subPropertyOf RETURN rel)
                         )
                     } 
               `);
@@ -460,7 +539,7 @@ var schema = new GraphQLSchema({
             description: "movies",
             args: {
                 id: {
-                    description: "_key for a movie",
+                    description: "_id for a movie",
                     type: GraphQLString,
                     defaultValue: ""
                 },
@@ -471,14 +550,14 @@ var schema = new GraphQLSchema({
                 }
             },
             resolve(root, args) {
-                const FILTER = args.id == "" ? aql.literal(``) : aql.literal(` FILTER m._key == "${args.id}" `);
+                const FILTER = args.id == "" ? aql.literal(``) : aql.literal(` FILTER m._id == "${args.id}" `);
                 const LIMIT = args.limit == 0 ? aql.literal(``) : aql.literal(` LIMIT ${args.limit} `);
 
               return db._query(aql`
               FOR m IN Movie
               ${FILTER}
               ${LIMIT}
-              RETURN {'_key': m._key, 'title': m.title, 'overview': m.overview}
+              RETURN {'_id': m._id, 'title': m.title, 'overview': m.overview, 'tagline' : m.tagline, 'genres':m.genres, 'budget':m.budget}
               `);
             }
           },
@@ -487,7 +566,7 @@ var schema = new GraphQLSchema({
               description: "companies",
               args: {
                   id: {
-                      description: "_key for a company",
+                      description: "_id for a company",
                       type: GraphQLString,
                       defaultValue: ""
                   },
@@ -498,14 +577,14 @@ var schema = new GraphQLSchema({
                 }
               },
               resolve(root, args) {
-                  const FILTER = args.id == "" ? aql.literal(``) : aql.literal(` FILTER c._key == "${args.id}" `);
+                  const FILTER = args.id == "" ? aql.literal(``) : aql.literal(` FILTER c._id == "${args.id}" `);
                   const LIMIT = args.limit == 0 ? aql.literal(``) : aql.literal(` LIMIT ${args.limit} `);
 
                   return db._query(aql`
               FOR c IN Company
               ${FILTER}
               ${LIMIT}
-              RETURN {'_key': c._key, 'name': c.name}
+              RETURN {'_id': c._id, 'name': c.name}
               `);
               }
           },
@@ -514,25 +593,25 @@ var schema = new GraphQLSchema({
               description: "genres",
               args: {
                   id: {
-                      description: "_key for a genre",
+                      description: "_id for a genre",
                       type: GraphQLString,
                       defaultValue: ""
                   },
                   limit: {
                       description: "limit number of results",
                       type: GraphQLInt,
-                      defaultValue: 0
+                      defaultValue: 10
                   }
               },
               resolve(root, args) {
-                  const FILTER = args.id == "" ? aql.literal(``) : aql.literal(` FILTER g._key == "${args.id}" `);
+                  const FILTER = args.id == "" ? aql.literal(``) : aql.literal(` FILTER g._id == "${args.id}" `);
                   const LIMIT = args.limit == 0 ? aql.literal(``) : aql.literal(` LIMIT ${args.limit} `);
 
                   return db._query(aql`
               FOR g IN Genre
               ${FILTER}
               ${LIMIT}
-              RETURN {'_key': g._key, 'name': g.name, 'description' : g.description}
+              RETURN {'_id': g._id, 'name': g.name, 'description' : g.description}
               `);
               }
           },
@@ -541,25 +620,25 @@ var schema = new GraphQLSchema({
               description: "people",
               args: {
                   id: {
-                      description: "_key for a person",
+                      description: "_id for a person",
                       type: GraphQLString,
                       defaultValue: ""
                   },
                   limit: {
                     description: "limit number of results",
                     type: GraphQLInt,
-                    defaultValue: 0
+                    defaultValue: 10
                 }
               },
               resolve(root, args) {
-                  const FILTER = args.id == "" ? aql.literal(``) : aql.literal(` FILTER p._key == "${args.id}" `);
+                  const FILTER = args.id == "" ? aql.literal(``) : aql.literal(` FILTER p._id == "${args.id}" `);
                   const LIMIT = args.limit == 0 ? aql.literal(``) : aql.literal(` LIMIT ${args.limit} `);
 
                   return db._query(aql`
               FOR p IN Person
               ${FILTER}
               ${LIMIT}
-              RETURN {'_key': p._key, 'name': p.name}
+              RETURN {'_id': p._id, 'name': p.name}
               `);
               }
           },
@@ -568,25 +647,25 @@ var schema = new GraphQLSchema({
               description: "user",
               args: {
                   id: {
-                      description: "_key for a user",
+                      description: "_id for a user",
                       type: GraphQLString,
                       defaultValue: ""
                   },
                   limit: {
                     description: "limit number of results",
                     type: GraphQLInt,
-                    defaultValue: 0
+                    defaultValue: 10
                 }
               },
               resolve(root, args) {
-                  const FILTER = args.id == "" ? aql.literal(``) : aql.literal(` FILTER u._key == "${args.id}" `);
+                  const FILTER = args.id == "" ? aql.literal(``) : aql.literal(` FILTER u._id == "${args.id}" `);
                   const LIMIT = args.limit == 0 ? aql.literal(``) : aql.literal(` LIMIT ${args.limit} `);
 
                   return db._query(aql`
               FOR u IN User
               ${FILTER}
               ${LIMIT}
-              RETURN {'_key': u._key, 'name': u.name}
+              RETURN {'_id': u._id, 'name': u.name}
               `);
               }
           },
@@ -612,7 +691,7 @@ var schema = new GraphQLSchema({
               description: "recommend movies using Collaborative Filtering implemented in AQL query",
               args: {
                   userId: {
-                      description: "_key for a user",
+                      description: "_id for a user",
                       type: GraphQLString,
                       defaultValue: "User/1"
                   },
@@ -665,12 +744,12 @@ var schema = new GraphQLSchema({
               description: "recommend movies using content based TFIDF inferences accessed in AQL",
               args: {
                   userId: {
-                      description: "_key for a user",
+                      description: "_id for a user",
                       type: GraphQLString,
                       defaultValue: "User/1"
                   },
                   movieId: {
-                      description: "_key for a recommended Movie",
+                      description: "_id for a recommended Movie",
                       type: GraphQLString,
                       defaultValue: "Movie/58559"
                   },
@@ -699,7 +778,7 @@ var schema = new GraphQLSchema({
               description: "recommend movies using content based TFIDF inferences accessed in AQL",
               args: {
                   userId: {
-                      description: "_key for a user",
+                      description: "_id for a user",
                       type: GraphQLString,
                       defaultValue: "User/1"
                   },
@@ -750,12 +829,12 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
               description: "recommend movies using content based TFIDF inferences accessed in AQL",
               args: {
                   userId: {
-                      description: "_key for a user",
+                      description: "_id for a user",
                       type: GraphQLString,
                       defaultValue: "User/1"
                   },
                   movieId: {
-                      description: "_key for a recommended Movie",
+                      description: "_id for a recommended Movie",
                       type: GraphQLString,
                       defaultValue: "Movie/761"
                   },
@@ -784,12 +863,12 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
               description: "recommend movies using content based TFIDF inferences accessed in AQL",
               args: {
                   userId: {
-                      description: "_key for a user",
+                      description: "_id for a user",
                       type: GraphQLString,
                       defaultValue: "User/1"
                   },
                   movieId: {
-                      description: "_key for a recommended Movie",
+                      description: "_id for a recommended Movie",
                       type: GraphQLString,
                       defaultValue: "Movie/8125"
                   },
@@ -818,7 +897,7 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
               description: "recommend movies using embeddings and similarity inferences accessed in AQL",
               args: {
                   userId: {
-                      description: "_key for a user",
+                      description: "_id for a user",
                       type: GraphQLString,
                       defaultValue: "User/1"
                   },
