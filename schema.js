@@ -80,6 +80,18 @@ const modelType = new GraphQLObjectType({
                 type: GraphQLString,
                 description: "The Model function"
             },
+            notebook: {
+                type: GraphQLString,
+                description: "The notebook implementing the model"
+            },
+            recommend: {
+                type: GraphQLString,
+                description: "The recommendation interface name"
+            },
+            explain: {
+                type: GraphQLString,
+                description: "The recommendation explanation interface name"
+            },
             components: {
                 type: graphql.GraphQLList(GraphQLString),
                 description: "List of analytic and ML components in model",
@@ -515,7 +527,7 @@ var schema = new GraphQLSchema({
               FOR m IN Model
               ${FILTER}
               ${LIMIT}
-              RETURN {'_id': m._id, 'name': m.name, 'description': m.description, 'query': m.query, 'function' : m.function, 'components':m.components}
+              RETURN m
               `);
               }
           },
