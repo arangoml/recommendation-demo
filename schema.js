@@ -176,6 +176,13 @@ const movieType = new GraphQLObjectType({
                 resolve(movie) {
                     return movie.genres
                 }
+            },
+            voteAverage: {
+                type: GraphQLFloat,
+                description: "User vote average",
+                resolve(movie) {
+                    return movie.voteAverage
+                }
             }
         }
     }
@@ -764,12 +771,13 @@ var schema = new GraphQLSchema({
                   const movieId = args.movieId == "" ? aql.literal(``) : aql.literal(` "${args.movieId}" `);
                   const pathLimit = args.pathLimit == 0 ? aql.literal(``) : aql.literal(` ${args.pathLimit} `);
                   return db._query(aql`
-       FOR path IN INBOUND K_SHORTEST_PATHS ${movieId} TO ${userId} ANY rates
-       OPTIONS {
-        weightAttribute: 'distance',
-        defaultWeight: 1}
-        LIMIT ${pathLimit}
-        RETURN path
+                  WITH Movie, User
+                    FOR path IN INBOUND K_SHORTEST_PATHS ${movieId} TO ${userId} ANY rates
+                    OPTIONS {
+                        weightAttribute: 'distance',
+                        defaultWeight: 1}
+                        LIMIT ${pathLimit}
+                        RETURN path
               `);
               }
           },
@@ -849,12 +857,13 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
                   const movieId = args.movieId == "" ? aql.literal(``) : aql.literal(` "${args.movieId}" `);
                   const pathLimit = args.pathLimit == 0 ? aql.literal(``) : aql.literal(` ${args.pathLimit} `);
                   return db._query(aql`
-       FOR path IN INBOUND K_SHORTEST_PATHS ${movieId} TO ${userId} rates,  similarMovie_TFIDF_ML_Inference
-       OPTIONS {
-        weightAttribute: 'distance',
-        defaultWeight: 1}
-        LIMIT ${pathLimit}
-        RETURN path
+                  WITH Movie, User
+                    FOR path IN INBOUND K_SHORTEST_PATHS ${movieId} TO ${userId} rates,  similarMovie_TFIDF_ML_Inference
+                    OPTIONS {
+                        weightAttribute: 'distance',
+                        defaultWeight: 1}
+                        LIMIT ${pathLimit}
+                        RETURN path
               `);
               }
           },
@@ -883,12 +892,13 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
                   const movieId = args.movieId == "" ? aql.literal(``) : aql.literal(` "${args.movieId}" `);
                   const pathLimit = args.pathLimit == 0 ? aql.literal(``) : aql.literal(` ${args.pathLimit} `);
                   return db._query(aql`
-       FOR path IN INBOUND K_SHORTEST_PATHS ${movieId} TO ${userId} rates,  similarMovie_Embedding_Inference
-       OPTIONS {
-        weightAttribute: 'distance',
-        defaultWeight: 1}
-        LIMIT ${pathLimit}
-        RETURN path
+                  WITH Movie, User
+                    FOR path IN INBOUND K_SHORTEST_PATHS ${movieId} TO ${userId} rates,  similarMovie_Embedding_Inference
+                    OPTIONS {
+                        weightAttribute: 'distance',
+                        defaultWeight: 1}
+                        LIMIT ${pathLimit}
+                        RETURN path
               `);
               }
           },
