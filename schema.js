@@ -793,6 +793,51 @@ var schema = new GraphQLSchema({
               `);
               }
           },
+          recommendMoviesContentBasedAQL: {
+              type: new graphql.GraphQLList(recommendationType),
+              description: "Use AQL to recommend movies using TFIDF in ArangoSearch",
+              args: {
+                  userId: {
+                      description: "_id for a user",
+                      type: GraphQLString,
+                      defaultValue: "User/1"
+                  },
+                  topRatedMovieLimit: {
+                      description: "limit number of users top rated movies considered",
+                      type: GraphQLInt,
+                      defaultValue: 100
+                  },
+                  movieRecommendationLimit: {
+                      description: "limit number of movies recommended",
+                      type: GraphQLInt,
+                      defaultValue: 5
+                  }
+              },
+              resolve(root, args) {
+                  const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
+                  const topRatedMovieLimit = args.topRatedMovieLimit == 0 ? aql.literal(``) : aql.literal(` ${args.topRatedMovieLimit} `);
+                  const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
+                  return db._query(aql`
+/*
+This query uses the TFIDF similarity inference computed using ArangoSearch
+The query works as follows:
+Given a user, what movies are similar to the user's highest rated (topRatedLimit) movies and return the most similar movies the user has not rated.
+*/
+
+LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${userId} SORT  ratingEdge.rating DESC RETURN PARSE_IDENTIFIER(ratingEdge._to).key)
+FOR ratingEdge IN rates  
+    FILTER ratingEdge._from == ${userId}
+    SORT  ratingEdge.rating DESC 
+    LIMIT ${topRatedMovieLimit} 
+    LET movie = DOCUMENT(ratingEdge._to)
+        FOR movieView IN MovieView
+            SEARCH ANALYZER(movieView.overview IN TOKENS (movie.overview, 'text_en'), 'text_en')
+            FILTER movieView._key NOT IN userRatedMovieKeys //Don't recommend movies already rated
+            SORT TFIDF(movieView) DESC LIMIT ${movieRecommendationLimit}
+            RETURN {movie: DOCUMENT("Movie", movieView._key) , score : TFIDF(movieView), distance: 1/TFIDF(movieView)} 
+              `);
+              }
+          },
           recommendMoviesContentBasedML: {
               type: new graphql.GraphQLList(recommendationType),
               description: "recommend movies using content based TFIDF inferences accessed in AQL",
