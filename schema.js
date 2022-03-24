@@ -917,11 +917,11 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
               resolve(root, args) {
                   const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
                   const movieId = args.movieId == "" ? aql.literal(``) : aql.literal(` "${args.movieId}" `);
-                  const similarMovieInference = args.similarMovieInference == "" ? aql.literal(``) : aql.literal(` "${args.similarMovieInference}" `);
+                  
                   const pathLimit = args.pathLimit == 0 ? aql.literal(``) : aql.literal(` ${args.pathLimit} `);
                   return db._query(aql`
                   WITH Movie, User
-                    LET recommendedMovie = DOCUMENT ${movieId}
+                    LET recommendedMovie = DOCUMENT(${movieId})
                     FOR movie,ratingEdge, path IN 1..1 OUTBOUND ${userId} rates  
                     SORT  ratingEdge.rating DESC 
                     LIMIT ${pathLimit} 
@@ -930,9 +930,11 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
                         FILTER movieView._key == recommendedMovie._key
                         SORT TFIDF(movieView) DESC LIMIT ${pathLimit} 
                         RETURN {edges : APPEND(path.edges, 
-                        {_id : CONCAT(${similarMovieInference},movie._key), 
+                        {_id : CONCAT("similarMovie_Inference_TFIDF_AQL/",movie._key),
+                        _key: movie._key, 
                         _from : movie._id, 
-                        _to : recommendedMovie._id, 
+                        _to : recommendedMovie._id,
+                        _rev: movie._rev, 
                         distance : TFIDF(movieView)}), 
                         vertices : APPEND (path.vertices, recommendedMovie)}
               `);
