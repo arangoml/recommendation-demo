@@ -760,7 +760,7 @@ var schema = new GraphQLSchema({
           },
           explainRecommendMoviesCollaborativeFilteringAQL: {
               type: new graphql.GraphQLList(arangoGraphType),
-              description: "recommend movies using content based TFIDF inferences accessed in AQL",
+              description: "recommend movies using collaborative filtering in AQL",
               args: {
                   userId: {
                       description: "_id for a user",
@@ -889,6 +889,55 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
               `);
               }
           },
+          explainRecommendMoviesContentBasedAQL: {
+              type: new graphql.GraphQLList(arangoGraphType),
+              description: "Explain recommend movies using content based ArangoSearch TFIDF and AQL",
+              args: {
+                  userId: {
+                      description: "_id for a user",
+                      type: GraphQLString,
+                      defaultValue: "User/1"
+                  },
+                  movieId: {
+                      description: "_id for a recommended Movie",
+                      type: GraphQLString,
+                      defaultValue: "Movie/761"
+                  },
+                  similarMovieInference : {
+                      description: "Similar movie virtual inference edge",
+                      type: GraphQLString,
+                      defaultValue: "similarMovie_TFIDF_AQL/"
+                  },
+                  pathLimit: {
+                      description: "limit number of explanation  paths",
+                      type: GraphQLInt,
+                      defaultValue: 1
+                  }
+              },
+              resolve(root, args) {
+                  const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
+                  const movieId = args.movieId == "" ? aql.literal(``) : aql.literal(` "${args.movieId}" `);
+                  const similarMovieInference = args.similarMovieInference == "" ? aql.literal(``) : aql.literal(` "${args.similarMovieInference}" `);
+                  const pathLimit = args.pathLimit == 0 ? aql.literal(``) : aql.literal(` ${args.pathLimit} `);
+                  return db._query(aql`
+                  WITH Movie, User
+                    LET recommendedMovie = DOCUMENT ${movieId}
+                    FOR movie,ratingEdge, path IN 1..1 OUTBOUND ${userId} rates  
+                    SORT  ratingEdge.rating DESC 
+                    LIMIT ${pathLimit} 
+                    FOR movieView IN MovieView
+                        SEARCH ANALYZER(movieView.overview IN TOKENS (movie.overview, 'text_en'), 'text_en')
+                        FILTER movieView._key == recommendedMovie._key
+                        SORT TFIDF(movieView) DESC LIMIT ${pathLimit} 
+                        RETURN {edges : APPEND(path.edges, 
+                        {_id : CONCAT(${similarMovieInference},movie._key), 
+                        _from : movie._id, 
+                        _to : recommendedMovie._id, 
+                        distance : TFIDF(movieView)}), 
+                        vertices : APPEND (path.vertices, recommendedMovie)}
+              `);
+              }
+          },
           explainRecommendMoviesContentBasedML: {
               type: new graphql.GraphQLList(arangoGraphType),
               description: "recommend movies using content based TFIDF inferences accessed in AQL",
@@ -926,7 +975,7 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
           },
           explainRecommendMoviesEmbeddingML: {
               type: new graphql.GraphQLList(arangoGraphType),
-              description: "recommend movies using content based TFIDF inferences accessed in AQL",
+              description: "recommend movies using matrix factorization inferences accessed in AQL",
               args: {
                   userId: {
                       description: "_id for a user",
