@@ -793,6 +793,68 @@ var schema = new GraphQLSchema({
               `);
               }
           },
+          recommendMoviesPredictionGNN: {
+              type: new graphql.GraphQLList(recommendationType),
+              description: "Use AQL to recommend movies using TFIDF in ArangoSearch",
+              args: {
+                  userId: {
+                      description: "_id for a user",
+                      type: GraphQLString,
+                      defaultValue: "User/1"
+                  },
+                  movieRecommendationLimit: {
+                      description: "limit number of movies recommended",
+                      type: GraphQLInt,
+                      defaultValue: 5
+                  }
+              },
+              resolve(root, args) {
+                  const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
+                  const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
+                  return db._query(aql`
+ FOR rating in ratesPrediction_gnn
+    FILTER rating._from == ${userId}
+    LIMIT ${movieRecommendationLimit}
+    LET movie = DOCUMENT(rating._to)
+RETURN {movie: movie, score : rating.rating, distance :1/rating.rating}
+              `);
+              }
+          },
+          explainRecommendMoviesPredictionGNN: {
+              type: new graphql.GraphQLList(arangoGraphType),
+              description: "recommend movies using collaborative filtering in AQL",
+              args: {
+                  userId: {
+                      description: "_id for a user",
+                      type: GraphQLString,
+                      defaultValue: "User/1"
+                  },
+                  movieId: {
+                      description: "_id for a recommended Movie",
+                      type: GraphQLString,
+                      defaultValue: "Movie/3474"
+                  },
+                  pathLimit: {
+                      description: "limit number of explanation  paths",
+                      type: GraphQLInt,
+                      defaultValue: 1
+                  }
+              },
+              resolve(root, args) {
+                  const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
+                  const movieId = args.movieId == "" ? aql.literal(``) : aql.literal(` "${args.movieId}" `);
+                  const pathLimit = args.pathLimit == 0 ? aql.literal(``) : aql.literal(` ${args.pathLimit} `);
+                  return db._query(aql`
+                  WITH Movie, User
+                    FOR path IN INBOUND K_SHORTEST_PATHS ${movieId} TO ${userId} ANY ratesPrediction_gnn
+                    OPTIONS {
+                        weightAttribute: 'distance',
+                        defaultWeight: 1}
+                        LIMIT ${pathLimit}
+                        RETURN path
+              `);
+              }
+          },
           recommendMoviesContentBasedAQL: {
               type: new graphql.GraphQLList(recommendationType),
               description: "Use AQL to recommend movies using TFIDF in ArangoSearch",
