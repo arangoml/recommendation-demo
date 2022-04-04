@@ -714,7 +714,7 @@ var schema = new GraphQLSchema({
                       type: GraphQLString,
                       defaultValue: "User/1"
                   },
-                  similarUserLimit: {
+                  expansionLimit: {
                       description: "limit number of similar users considered",
                       type: GraphQLInt,
                       defaultValue: 5
@@ -727,7 +727,7 @@ var schema = new GraphQLSchema({
               },
               resolve(root, args) {
                   const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
-                  const similarUserLimit = args.similarUserLimit == 0 ? aql.literal(``) : aql.literal(` ${args.similarUserLimit} `);
+                  const expansionLimit = args.expansionLimit == 0 ? aql.literal(``) : aql.literal(` ${args.expansionLimit} `);
                   const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
                   return db._query(aql`
               WITH Movie, User, rates
@@ -742,7 +742,7 @@ var schema = new GraphQLSchema({
                         LET userB_len   = SQRT(SUM (FOR r IN g[*].userB_ratings RETURN r*r))
                         LET dot_product = SUM (FOR n IN 0..(LENGTH(g[*].userA_ratings) - 1) RETURN g[n].userA_ratings * g[n].userB_ratings)
                         LET cos_sim = dot_product/ (userA_len * userB_len)
-                        SORT cos_sim DESC LIMIT ${similarUserLimit}
+                        SORT cos_sim DESC LIMIT ${expansionLimit}
                         RETURN {userBs: userids,
                               cosine_similarity: cos_sim}
                 )
@@ -760,7 +760,7 @@ var schema = new GraphQLSchema({
           },
           explainRecommendMoviesCollaborativeFilteringAQL: {
               type: new graphql.GraphQLList(arangoGraphType),
-              description: "recommend movies using content based TFIDF inferences accessed in AQL",
+              description: "recommend movies using collaborative filtering in AQL",
               args: {
                   userId: {
                       description: "_id for a user",
@@ -793,16 +793,78 @@ var schema = new GraphQLSchema({
               `);
               }
           },
-          recommendMoviesContentBasedML: {
+          recommendMoviesPredictionGNN: {
               type: new graphql.GraphQLList(recommendationType),
-              description: "recommend movies using content based TFIDF inferences accessed in AQL",
+              description: "Use AQL to recommend movies using TFIDF in ArangoSearch",
               args: {
                   userId: {
                       description: "_id for a user",
                       type: GraphQLString,
                       defaultValue: "User/1"
                   },
-                  topRatedMovieLimit: {
+                  movieRecommendationLimit: {
+                      description: "limit number of movies recommended",
+                      type: GraphQLInt,
+                      defaultValue: 5
+                  }
+              },
+              resolve(root, args) {
+                  const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
+                  const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
+                  return db._query(aql`
+ FOR rating in ratesPrediction_gnn
+    FILTER rating._from == ${userId}
+    LIMIT ${movieRecommendationLimit}
+    LET movie = DOCUMENT(rating._to)
+RETURN {movie: movie, score : rating.rating, distance :1/rating.rating}
+              `);
+              }
+          },
+          explainRecommendMoviesPredictionGNN: {
+              type: new graphql.GraphQLList(arangoGraphType),
+              description: "recommend movies using collaborative filtering in AQL",
+              args: {
+                  userId: {
+                      description: "_id for a user",
+                      type: GraphQLString,
+                      defaultValue: "User/1"
+                  },
+                  movieId: {
+                      description: "_id for a recommended Movie",
+                      type: GraphQLString,
+                      defaultValue: "Movie/3474"
+                  },
+                  pathLimit: {
+                      description: "limit number of explanation  paths",
+                      type: GraphQLInt,
+                      defaultValue: 1
+                  }
+              },
+              resolve(root, args) {
+                  const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
+                  const movieId = args.movieId == "" ? aql.literal(``) : aql.literal(` "${args.movieId}" `);
+                  const pathLimit = args.pathLimit == 0 ? aql.literal(``) : aql.literal(` ${args.pathLimit} `);
+                  return db._query(aql`
+                  WITH Movie, User
+                    FOR path IN INBOUND K_SHORTEST_PATHS ${movieId} TO ${userId} ANY ratesPrediction_gnn
+                    OPTIONS {
+                        weightAttribute: 'distance',
+                        defaultWeight: 1}
+                        LIMIT ${pathLimit}
+                        RETURN path
+              `);
+              }
+          },
+          recommendMoviesContentBasedAQL: {
+              type: new graphql.GraphQLList(recommendationType),
+              description: "Use AQL to recommend movies using TFIDF in ArangoSearch",
+              args: {
+                  userId: {
+                      description: "_id for a user",
+                      type: GraphQLString,
+                      defaultValue: "User/1"
+                  },
+                  expansionLimit: {
                       description: "limit number of users top rated movies considered",
                       type: GraphQLInt,
                       defaultValue: 100
@@ -815,7 +877,52 @@ var schema = new GraphQLSchema({
               },
               resolve(root, args) {
                   const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
-                  const topRatedMovieLimit = args.topRatedMovieLimit == 0 ? aql.literal(``) : aql.literal(` ${args.topRatedMovieLimit} `);
+                  const expansionLimit = args.expansionLimit == 0 ? aql.literal(``) : aql.literal(` ${args.expansionLimit} `);
+                  const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
+                  return db._query(aql`
+/*
+This query uses the TFIDF similarity inference computed using ArangoSearch
+The query works as follows:
+Given a user, what movies are similar to the user's highest rated (topRatedLimit) movies and return the most similar movies the user has not rated.
+*/
+
+LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${userId} SORT  ratingEdge.rating DESC RETURN PARSE_IDENTIFIER(ratingEdge._to).key)
+FOR ratingEdge IN rates  
+    FILTER ratingEdge._from == ${userId}
+    SORT  ratingEdge.rating DESC 
+    LIMIT ${expansionLimit} 
+    LET movie = DOCUMENT(ratingEdge._to)
+        FOR movieView IN MovieView
+            SEARCH ANALYZER(movieView.overview IN TOKENS (movie.overview, 'text_en'), 'text_en')
+            FILTER movieView._key NOT IN userRatedMovieKeys //Don't recommend movies already rated
+            SORT TFIDF(movieView) DESC LIMIT ${movieRecommendationLimit}
+            RETURN {movie: DOCUMENT("Movie", movieView._key) , score : TFIDF(movieView), distance: 1/TFIDF(movieView)} 
+              `);
+              }
+          },
+          recommendMoviesContentBasedML: {
+              type: new graphql.GraphQLList(recommendationType),
+              description: "recommend movies using content based TFIDF inferences accessed in AQL",
+              args: {
+                  userId: {
+                      description: "_id for a user",
+                      type: GraphQLString,
+                      defaultValue: "User/1"
+                  },
+                  expansionLimit: {
+                      description: "limit number of users top rated movies considered",
+                      type: GraphQLInt,
+                      defaultValue: 100
+                  },
+                  movieRecommendationLimit: {
+                      description: "limit number of movies recommended",
+                      type: GraphQLInt,
+                      defaultValue: 5
+                  }
+              },
+              resolve(root, args) {
+                  const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
+                  const expansionLimit = args.expansionLimit == 0 ? aql.literal(``) : aql.literal(` ${args.expansionLimit} `);
                   const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
                   return db._query(aql`
 /*
@@ -828,7 +935,7 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
     FOR ratingEdge IN rates  
     FILTER ratingEdge._from == ${userId} 
     SORT  ratingEdge.rating DESC 
-    LIMIT ${topRatedMovieLimit} 
+    LIMIT ${expansionLimit} 
    LET similarMovieEdges = (FOR similarMovieEdge IN similarMovie_TFIDF_ML_Inference FILTER similarMovieEdge._from==ratingEdge._to RETURN similarMovieEdge)
    FILTER similarMovieEdges != null
     FOR similarMovieEdge IN similarMovieEdges
@@ -841,6 +948,57 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
         SORT aggregateScore DESC
         LIMIT  ${movieRecommendationLimit}
         RETURN {movie : DOCUMENT(recommendedMovieId) , score : aggregateScore} 
+              `);
+              }
+          },
+          explainRecommendMoviesContentBasedAQL: {
+              type: new graphql.GraphQLList(arangoGraphType),
+              description: "Explain recommend movies using content based ArangoSearch TFIDF and AQL",
+              args: {
+                  userId: {
+                      description: "_id for a user",
+                      type: GraphQLString,
+                      defaultValue: "User/1"
+                  },
+                  movieId: {
+                      description: "_id for a recommended Movie",
+                      type: GraphQLString,
+                      defaultValue: "Movie/761"
+                  },
+                  similarMovieInference : {
+                      description: "Similar movie virtual inference edge",
+                      type: GraphQLString,
+                      defaultValue: "similarMovie_TFIDF_AQL/"
+                  },
+                  pathLimit: {
+                      description: "limit number of explanation  paths",
+                      type: GraphQLInt,
+                      defaultValue: 1
+                  }
+              },
+              resolve(root, args) {
+                  const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
+                  const movieId = args.movieId == "" ? aql.literal(``) : aql.literal(` "${args.movieId}" `);
+                  
+                  const pathLimit = args.pathLimit == 0 ? aql.literal(``) : aql.literal(` ${args.pathLimit} `);
+                  return db._query(aql`
+                  WITH Movie, User
+                    LET recommendedMovie = DOCUMENT(${movieId})
+                    FOR movie,ratingEdge, path IN 1..1 OUTBOUND ${userId} rates  
+                    SORT  ratingEdge.rating DESC 
+                    LIMIT ${pathLimit} 
+                    FOR movieView IN MovieView
+                        SEARCH ANALYZER(movieView.overview IN TOKENS (movie.overview, 'text_en'), 'text_en')
+                        FILTER movieView._key == recommendedMovie._key
+                        SORT TFIDF(movieView) DESC LIMIT ${pathLimit} 
+                        RETURN {edges : APPEND(path.edges, 
+                        {_id : CONCAT("similarMovie_Inference_TFIDF_AQL/",movie._key),
+                        _key: movie._key, 
+                        _from : movie._id, 
+                        _to : recommendedMovie._id,
+                        _rev: movie._rev, 
+                        distance : TFIDF(movieView)}), 
+                        vertices : APPEND (path.vertices, recommendedMovie)}
               `);
               }
           },
@@ -881,7 +1039,7 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
           },
           explainRecommendMoviesEmbeddingML: {
               type: new graphql.GraphQLList(arangoGraphType),
-              description: "recommend movies using content based TFIDF inferences accessed in AQL",
+              description: "recommend movies using matrix factorization inferences accessed in AQL",
               args: {
                   userId: {
                       description: "_id for a user",
@@ -923,7 +1081,7 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
                       type: GraphQLString,
                       defaultValue: "User/1"
                   },
-                  topRatedMovieLimit: {
+                  expansionLimit: {
                       description: "limit number of users top rated movies considered",
                       type: GraphQLInt,
                       defaultValue: 100
@@ -936,7 +1094,7 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
               },
               resolve(root, args) {
                   const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
-                  const topRatedMovieLimit = args.topRatedMovieLimit == 0 ? aql.literal(``) : aql.literal(` ${args.topRatedMovieLimit} `);
+                  const expansionLimit = args.expansionLimit == 0 ? aql.literal(``) : aql.literal(` ${args.expansionLimit} `);
                   const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
                   return db._query(aql`
 /*
@@ -949,7 +1107,7 @@ LET userRatedMovies = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${user
     FOR ratingEdge IN rates  
     FILTER ratingEdge._from == ${userId}
     SORT  ratingEdge.rating DESC 
-    LIMIT ${topRatedMovieLimit} 
+    LIMIT ${expansionLimit} 
     FOR similarMovieEdge IN similarMovie_Embedding_Inference
         FILTER similarMovieEdge._from == ratingEdge._to
         LET similarMovie = similarMovieEdge._to
