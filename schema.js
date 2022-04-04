@@ -714,7 +714,7 @@ var schema = new GraphQLSchema({
                       type: GraphQLString,
                       defaultValue: "User/1"
                   },
-                  similarUserLimit: {
+                  expansionLimit: {
                       description: "limit number of similar users considered",
                       type: GraphQLInt,
                       defaultValue: 5
@@ -727,7 +727,7 @@ var schema = new GraphQLSchema({
               },
               resolve(root, args) {
                   const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
-                  const similarUserLimit = args.similarUserLimit == 0 ? aql.literal(``) : aql.literal(` ${args.similarUserLimit} `);
+                  const expansionLimit = args.expansionLimit == 0 ? aql.literal(``) : aql.literal(` ${args.expansionLimit} `);
                   const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
                   return db._query(aql`
               WITH Movie, User, rates
@@ -742,7 +742,7 @@ var schema = new GraphQLSchema({
                         LET userB_len   = SQRT(SUM (FOR r IN g[*].userB_ratings RETURN r*r))
                         LET dot_product = SUM (FOR n IN 0..(LENGTH(g[*].userA_ratings) - 1) RETURN g[n].userA_ratings * g[n].userB_ratings)
                         LET cos_sim = dot_product/ (userA_len * userB_len)
-                        SORT cos_sim DESC LIMIT ${similarUserLimit}
+                        SORT cos_sim DESC LIMIT ${expansionLimit}
                         RETURN {userBs: userids,
                               cosine_similarity: cos_sim}
                 )
@@ -864,7 +864,7 @@ RETURN {movie: movie, score : rating.rating, distance :1/rating.rating}
                       type: GraphQLString,
                       defaultValue: "User/1"
                   },
-                  topRatedMovieLimit: {
+                  expansionLimit: {
                       description: "limit number of users top rated movies considered",
                       type: GraphQLInt,
                       defaultValue: 100
@@ -877,7 +877,7 @@ RETURN {movie: movie, score : rating.rating, distance :1/rating.rating}
               },
               resolve(root, args) {
                   const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
-                  const topRatedMovieLimit = args.topRatedMovieLimit == 0 ? aql.literal(``) : aql.literal(` ${args.topRatedMovieLimit} `);
+                  const expansionLimit = args.expansionLimit == 0 ? aql.literal(``) : aql.literal(` ${args.expansionLimit} `);
                   const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
                   return db._query(aql`
 /*
@@ -890,7 +890,7 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
 FOR ratingEdge IN rates  
     FILTER ratingEdge._from == ${userId}
     SORT  ratingEdge.rating DESC 
-    LIMIT ${topRatedMovieLimit} 
+    LIMIT ${expansionLimit} 
     LET movie = DOCUMENT(ratingEdge._to)
         FOR movieView IN MovieView
             SEARCH ANALYZER(movieView.overview IN TOKENS (movie.overview, 'text_en'), 'text_en')
@@ -909,7 +909,7 @@ FOR ratingEdge IN rates
                       type: GraphQLString,
                       defaultValue: "User/1"
                   },
-                  topRatedMovieLimit: {
+                  expansionLimit: {
                       description: "limit number of users top rated movies considered",
                       type: GraphQLInt,
                       defaultValue: 100
@@ -922,7 +922,7 @@ FOR ratingEdge IN rates
               },
               resolve(root, args) {
                   const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
-                  const topRatedMovieLimit = args.topRatedMovieLimit == 0 ? aql.literal(``) : aql.literal(` ${args.topRatedMovieLimit} `);
+                  const expansionLimit = args.expansionLimit == 0 ? aql.literal(``) : aql.literal(` ${args.expansionLimit} `);
                   const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
                   return db._query(aql`
 /*
@@ -935,7 +935,7 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
     FOR ratingEdge IN rates  
     FILTER ratingEdge._from == ${userId} 
     SORT  ratingEdge.rating DESC 
-    LIMIT ${topRatedMovieLimit} 
+    LIMIT ${expansionLimit} 
    LET similarMovieEdges = (FOR similarMovieEdge IN similarMovie_TFIDF_ML_Inference FILTER similarMovieEdge._from==ratingEdge._to RETURN similarMovieEdge)
    FILTER similarMovieEdges != null
     FOR similarMovieEdge IN similarMovieEdges
@@ -1081,7 +1081,7 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
                       type: GraphQLString,
                       defaultValue: "User/1"
                   },
-                  topRatedMovieLimit: {
+                  expansionLimit: {
                       description: "limit number of users top rated movies considered",
                       type: GraphQLInt,
                       defaultValue: 100
@@ -1094,7 +1094,7 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
               },
               resolve(root, args) {
                   const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
-                  const topRatedMovieLimit = args.topRatedMovieLimit == 0 ? aql.literal(``) : aql.literal(` ${args.topRatedMovieLimit} `);
+                  const expansionLimit = args.expansionLimit == 0 ? aql.literal(``) : aql.literal(` ${args.expansionLimit} `);
                   const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
                   return db._query(aql`
 /*
@@ -1107,7 +1107,7 @@ LET userRatedMovies = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${user
     FOR ratingEdge IN rates  
     FILTER ratingEdge._from == ${userId}
     SORT  ratingEdge.rating DESC 
-    LIMIT ${topRatedMovieLimit} 
+    LIMIT ${expansionLimit} 
     FOR similarMovieEdge IN similarMovie_Embedding_Inference
         FILTER similarMovieEdge._from == ratingEdge._to
         LET similarMovie = similarMovieEdge._to
