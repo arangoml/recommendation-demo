@@ -806,7 +806,12 @@ var schema = new GraphQLSchema({
                       description: "limit number of movies recommended",
                       type: GraphQLInt,
                       defaultValue: 5
-                  }
+                  },
+                  expansionLimit: {
+                    description: "(not used in GNN query) limit number of users top rated movies considered",
+                    type: GraphQLInt,
+                    defaultValue: 100
+                },
               },
               resolve(root, args) {
                   const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
