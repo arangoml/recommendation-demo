@@ -98,6 +98,13 @@ const modelType = new GraphQLObjectType({
                 resolve(m) {
                     return m.components
                 }
+            },
+            label: {
+                type:GraphQLString,
+                description: "UI Friendly label",
+                resolve(m) {
+                    return m.label
+                }
             }
         }
     }
