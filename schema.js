@@ -45,6 +45,43 @@ const classType = new GraphQLObjectType({
     }
 })
 
+const resourceType = new GraphQLObjectType({
+    name: "resources",
+    description: "resources related to recommendation method",
+    fields() {
+        return {
+            url: {
+                type: GraphQLString,
+                description: "The url of the resource",
+                resolve(resource) {
+                        return resource.url
+                }
+            },
+            description: {
+                type: GraphQLString,
+                description: "The description of the resource",
+                resolve(resource) {
+                        return resource.description
+                }
+            },
+            title: {
+                type: GraphQLString,
+                description: "The title of the resource",
+                resolve(resource) {
+                        return resource.title
+                }
+            },
+            image: {
+                type: GraphQLString,
+                description: "The image url of the resource",
+                resolve(resource) {
+                        return resource.image
+                }
+            }
+        }
+    }
+})
+
 const modelType = new GraphQLObjectType({
     name: "Model",
     description: "Model type",
@@ -104,6 +141,13 @@ const modelType = new GraphQLObjectType({
                 description: "UI Friendly label",
                 resolve(m) {
                     return m.label
+                }
+            },
+            resources: {
+                type: graphql.GraphQLList(resourceType),
+                description: "List of resources relevant to each recommendation",
+                resolve(m) {
+                    return m.resources
                 }
             }
         }
