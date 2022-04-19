@@ -578,6 +578,7 @@ var schema = new GraphQLSchema({
               FOR m IN Model
               ${FILTER}
               ${LIMIT}
+              SORT m._key
               RETURN m
               `);
               }
