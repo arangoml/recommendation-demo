@@ -1086,7 +1086,7 @@ LET userRatedMovies = (
                   movieId: {
                       description: "_id for a recommended Movie",
                       type: GraphQLString,
-                      defaultValue: "Movie/761"
+                      defaultValue: "Movie/82461"
                   },
                   pathLimit: {
                       description: "limit number of explanation  paths",
@@ -1099,22 +1099,20 @@ LET userRatedMovies = (
                   const movieId = args.movieId == "" ? aql.literal(``) : aql.literal(` "${args.movieId}" `);
                   const pathLimit = args.pathLimit == 0 ? aql.literal(``) : aql.literal(` ${args.pathLimit} `);
                   return db._query(aql`
-                  WITH Movie
-                  LET userRatedMovieKeys = (
-                      FOR ratingEdge IN rates 
-                          FILTER ratingEdge._from == ${userId}
-                  RETURN {id: ratingEdge._to, rating: ratingEdge.rating, }
-                  )
-          
-                  LET rated = userRatedMovieKeys[*].id
-                  FOR movie IN userRatedMovieKeys
-                          FOR v,e,p IN 1..1 OUTBOUND ${movieId} similarMovie_TFIDF_ML_Inference
-
-                          LET compoundScore = e.score*movie.rating/5.0
-                          SORT compoundScore DESC
-                          LIMIT ${pathLimit}
-
-                  RETURN p
+                  WITH Movie User
+                    LET userRatedMoviePath = (FOR v, e, p IN 1 OUTBOUND ${userId} rates RETURN p)
+                    LET rated = userRatedMoviePath[*].vertices[1]._id //userRatedMovieKeys[*]._to
+                    LET ratedEdges = userRatedMoviePath[*].edges[0]
+                    LET moviesSimilarToRecommendedPath =
+                        (FOR movieID IN ratedEdges//userRatedMovieKeys
+                            FOR v,e,p IN 1..1 OUTBOUND ${movieId} similarMovie_TFIDF_ML_Inference
+                            LET compoundScore = e.score*movieID.rating/5.0
+                            SORT compoundScore DESC                
+                            RETURN DISTINCT p)
+                    LET similarMoviesRatedByUser = INTERSECTION (rated, UNIQUE(moviesSimilarToRecommendedPath[*].vertices[1]._id))
+                    FOR path IN UNION(userRatedMoviePath[* FILTER CURRENT.vertices[1]._id IN similarMoviesRatedByUser RETURN CURRENT], moviesSimilarToRecommendedPath[*] ) 
+                    LIMIT ${pathLimit} + 1
+                    RETURN path
           
               `);
               }
