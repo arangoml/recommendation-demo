@@ -958,7 +958,7 @@ LET userRatedMovies = (
        
        LET TFIDFscore = TFIDF(movieView)
        SORT TFIDFscore DESC 
-       LIMIT ${movieRecommendationLimit }
+       LIMIT ${movieRecommendationLimit}
    
     RETURN {
    movie: movieView, 
@@ -1189,7 +1189,7 @@ WITH Movie
 LET userRatedMovies = (
     FOR ratingEdge IN rates 
         FILTER ratingEdge._from == ${userId}
-        LIMIT ${topRatedMovieLimit}
+        LIMIT ${expansionLimit}
         SORT ratingEdge.rating DESC 
     RETURN {id: ratingEdge._to, rating: ratingEdge.rating, }
     )
