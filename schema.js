@@ -872,7 +872,7 @@ var schema = new GraphQLSchema({
 WITH Movie
 FOR v, e, p IN 1..1 OUTBOUND ${userId} ratesPrediction_gnn
 
-RETURN {
+RETURN DISTINCT {
     movie: v, 
     score: e.rating, 
     distance: 1/e.rating
@@ -960,7 +960,7 @@ LET userRatedMovies = (
        SORT TFIDFscore DESC 
        LIMIT ${movieRecommendationLimit}
    
-    RETURN {
+    RETURN DISTINCT{
    movie: movieView, 
    score : TFIDFscore, 
    distance: 1/TFIDFscore
@@ -1001,24 +1001,26 @@ LET userRatedMovies = (
         */
 
         WITH Movie
-        LET userRatedMovieKeys = (
+        LET userRatedMovies = (
             FOR ratingEdge IN rates 
                 FILTER ratingEdge._from == ${userId}
         RETURN {id: ratingEdge._to, rating: ratingEdge.rating, }
         )
 
-        LET rated = userRatedMovieKeys[*].id
-            FOR movie IN userRatedMovieKeys
+        LET rated = userRatedMovies[*].id
+            FOR movie IN userRatedMovies
                 FOR v,e,p IN 1..1 OUTBOUND movie.id similarMovie_TFIDF_ML_Inference
                 FILTER v._id NOT IN rated
                 
                 LET compoundScore = e.score*movie.rating/5.0
                 SORT compoundScore DESC
                 LIMIT ${movieRecommendationLimit} 
-        RETURN {
-            movie : v, 
-            score : compoundScore
-            }
+                COLLECT mov = v INTO g KEEP compoundScore
+        
+RETURN {
+        movie:mov.title, 
+        score: FIRST(g[*].compoundScore)
+        }
 
               `);
               }
@@ -1204,7 +1206,7 @@ FOR movie IN userRatedMovies
 
      LIMIT ${movieRecommendationLimit}
 
- RETURN {movie : v , score : compoundScore}
+ RETURN DISTINCT {movie : v , score : compoundScore}
 
 
               `);
