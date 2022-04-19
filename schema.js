@@ -869,14 +869,14 @@ var schema = new GraphQLSchema({
                   const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
                   const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
                   return db._query(aql`
-                  WITH Movie
-                  FOR v, e, p IN 1..1 OUTBOUND ${userId} ratesPrediction_gnn
-                  
-                  RETURN {
-                      movie: v, 
-                      score: e.rating, 
-                      distance: 1/e.rating
-                      }
+WITH Movie
+FOR v, e, p IN 1..1 OUTBOUND ${userId} ratesPrediction_gnn
+
+RETURN {
+    movie: v, 
+    score: e.rating, 
+    distance: 1/e.rating
+    }
               `);
               }
           },
@@ -961,13 +961,9 @@ LET userRatedMovies = (
        LIMIT ${movieRecommendationLimit }
    
     RETURN {
-   
    movie: movieView, 
-   
    score : TFIDFscore, 
-   
    distance: 1/TFIDFscore
-   
    }
   
               `);
@@ -1189,25 +1185,29 @@ The query works as follows:
 Given a user, what movies are similar to the user's highest rated (topRatedLimit) movies and return the most similar movies the user has not rated.
 */
 
-        WITH Movie
-        LET userRatedMovieKeys = (
-            FOR ratingEdge IN rates 
-                FILTER ratingEdge._from == ${userId}
-        RETURN {id: ratingEdge._to, rating: ratingEdge.rating, }
-        )
+WITH Movie
+LET userRatedMovies = (
+    FOR ratingEdge IN rates 
+        FILTER ratingEdge._from == ${userId}
+        LIMIT ${topRatedMovieLimit}
+        SORT ratingEdge.rating DESC 
+    RETURN {id: ratingEdge._to, rating: ratingEdge.rating, }
+    )
+LET rated = userRatedMovies[*].id
 
-        LET rated = userRatedMovieKeys[*].id
-            FOR movie IN userRatedMovieKeys
-                FOR v,e,p IN 1..1 OUTBOUND movie.id similarMovie_TFIDF_ML_Inference
-                FILTER v._id NOT IN rated
-                
-                LET compoundScore = e.score*movie.rating/5.0
-                SORT compoundScore DESC
-                LIMIT ${movieRecommendationLimit} 
-        RETURN {
-            movie : v, 
-            score : compoundScore
-            }
+FOR movie IN userRatedMovies
+    FOR v,e,p IN 1..1 OUTBOUND movie.id similarMovie_Embedding_Inference
+        FILTER v._id NOT IN rated
+
+     //compound score is user rating factor / distance - talk to data scientist on how to do this in a more scientific way
+     LET compoundScore = (movie.rating/5.0)/e.distance
+
+     SORT compoundScore DESC
+
+     LIMIT ${movieRecommendationLimit}
+
+ RETURN {movie : v , score : compoundScore}
+
 
               `);
               }
