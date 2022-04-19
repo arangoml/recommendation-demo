@@ -578,6 +578,7 @@ var schema = new GraphQLSchema({
               FOR m IN Model
               ${FILTER}
               ${LIMIT}
+              SORT m._key
               RETURN m
               `);
               }
@@ -868,11 +869,14 @@ var schema = new GraphQLSchema({
                   const userId = args.userId == "" ? aql.literal(``) : aql.literal(` "${args.userId}" `);
                   const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
                   return db._query(aql`
- FOR rating in ratesPrediction_gnn
-    FILTER rating._from == ${userId}
-    LIMIT ${movieRecommendationLimit}
-    LET movie = DOCUMENT(rating._to)
-RETURN {movie: movie, score : rating.rating, distance :1/rating.rating}
+WITH Movie
+FOR v, e, p IN 1..1 OUTBOUND ${userId} ratesPrediction_gnn
+
+RETURN {
+    movie: v, 
+    score: e.rating, 
+    distance: 1/e.rating
+    }
               `);
               }
           },
@@ -902,12 +906,9 @@ RETURN {movie: movie, score : rating.rating, distance :1/rating.rating}
                   const pathLimit = args.pathLimit == 0 ? aql.literal(``) : aql.literal(` ${args.pathLimit} `);
                   return db._query(aql`
                   WITH Movie, User
-                    FOR path IN INBOUND K_SHORTEST_PATHS ${movieId} TO ${userId} ANY ratesPrediction_gnn
-                    OPTIONS {
-                        weightAttribute: 'distance',
-                        defaultWeight: 1}
-                        LIMIT ${pathLimit}
-                        RETURN path
+                  FOR v, e, p IN 1..1 OUTBOUND ${userId} ratesPrediction_gnn
+                  PRUNE v._id == ${movieId}
+                  RETURN p
               `);
               }
           },
@@ -942,17 +943,29 @@ The query works as follows:
 Given a user, what movies are similar to the user's highest rated (topRatedLimit) movies and return the most similar movies the user has not rated.
 */
 
-LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${userId} SORT  ratingEdge.rating DESC RETURN PARSE_IDENTIFIER(ratingEdge._to).key)
-FOR ratingEdge IN rates  
-    FILTER ratingEdge._from == ${userId}
-    SORT  ratingEdge.rating DESC 
-    LIMIT ${expansionLimit} 
-    LET movie = DOCUMENT(ratingEdge._to)
-        FOR movieView IN MovieView
-            SEARCH ANALYZER(movieView.overview IN TOKENS (movie.overview, 'text_en'), 'text_en')
-            FILTER movieView._key NOT IN userRatedMovieKeys //Don't recommend movies already rated
-            SORT TFIDF(movieView) DESC LIMIT ${movieRecommendationLimit}
-            RETURN {movie: DOCUMENT("Movie", movieView._key) , score : TFIDF(movieView), distance: 1/TFIDF(movieView)} 
+LET userRatedMovies = (
+    FOR ratingEdge IN rates 
+       FILTER ratingEdge._from == ${userId}
+      RETURN ratingEdge._to
+   ) 
+  
+  FOR v,e,p IN 1..1 OUTBOUND ${userId} rates
+        SORT e.rating DESC
+       LIMIT 10
+   FOR movieView IN MovieView 
+       SEARCH ANALYZER(movieView.description IN TOKENS (v.description, 'text_en'), 'text_en') 
+       FILTER movieView._id  NOT IN userRatedMovies //Don't recommend movies already rated 
+       
+       LET TFIDFscore = TFIDF(movieView)
+       SORT TFIDFscore DESC 
+       LIMIT ${movieRecommendationLimit}
+   
+    RETURN {
+   movie: movieView, 
+   score : TFIDFscore, 
+   distance: 1/TFIDFscore
+   }
+  
               `);
               }
           },
@@ -981,29 +994,32 @@ FOR ratingEdge IN rates
                   const expansionLimit = args.expansionLimit == 0 ? aql.literal(``) : aql.literal(` ${args.expansionLimit} `);
                   const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
                   return db._query(aql`
-/*
-This query uses the TFIDF inference computed using ML and transferred to ArangoDB in similarMovie_TFIDF_ML_Inference edge collection
-The query works as follows:
-Given a user, what movies are similar to the user's highest rated (topRatedLimit) movies and return the most similar movies the user has not rated.
-*/
+        /*
+        This query uses the TFIDF inference computed using ML and transferred to ArangoDB in similarMovie_TFIDF_ML_Inference edge collection
+        The query works as follows:
+        Given a user, what movies are similar to the user's highest rated (topRatedLimit) movies and return the most similar movies the user has not rated.
+        */
 
-LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${userId} SORT  ratingEdge.rating DESC RETURN PARSE_IDENTIFIER(ratingEdge._to).key)
-    FOR ratingEdge IN rates  
-    FILTER ratingEdge._from == ${userId} 
-    SORT  ratingEdge.rating DESC 
-    LIMIT ${expansionLimit} 
-   LET similarMovieEdges = (FOR similarMovieEdge IN similarMovie_TFIDF_ML_Inference FILTER similarMovieEdge._from==ratingEdge._to RETURN similarMovieEdge)
-   FILTER similarMovieEdges != null
-    FOR similarMovieEdge IN similarMovieEdges
-        FILTER PARSE_IDENTIFIER(similarMovieEdge._to).key NOT IN userRatedMovieKeys //Don't recommend movies already rated
-        //compound score is user rating factor * TFIDF similar movie score
-        LET compoundScore = similarMovieEdge.score*ratingEdge.rating/5.0 
-        //Aggregate ratings for duplicate similar movies for user-rated movie
-        COLLECT recommendedMovieId = similarMovieEdge._to AGGREGATE aggregateScore = MAX(compoundScore)
-        //Recommended movies with the highest compound score
-        SORT aggregateScore DESC
-        LIMIT  ${movieRecommendationLimit}
-        RETURN {movie : DOCUMENT(recommendedMovieId) , score : aggregateScore} 
+        WITH Movie
+        LET userRatedMovieKeys = (
+            FOR ratingEdge IN rates 
+                FILTER ratingEdge._from == ${userId}
+        RETURN {id: ratingEdge._to, rating: ratingEdge.rating, }
+        )
+
+        LET rated = userRatedMovieKeys[*].id
+            FOR movie IN userRatedMovieKeys
+                FOR v,e,p IN 1..1 OUTBOUND movie.id similarMovie_TFIDF_ML_Inference
+                FILTER v._id NOT IN rated
+                
+                LET compoundScore = e.score*movie.rating/5.0
+                SORT compoundScore DESC
+                LIMIT ${movieRecommendationLimit} 
+        RETURN {
+            movie : v, 
+            score : compoundScore
+            }
+
               `);
               }
           },
@@ -1044,7 +1060,7 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
                     SORT  ratingEdge.rating DESC 
                     LIMIT ${pathLimit} 
                     FOR movieView IN MovieView
-                        SEARCH ANALYZER(movieView.overview IN TOKENS (movie.overview, 'text_en'), 'text_en')
+                        SEARCH ANALYZER(movieView.description IN TOKENS (movie.description, 'text_en'), 'text_en')
                         FILTER movieView._key == recommendedMovie._key
                         SORT TFIDF(movieView) DESC LIMIT ${pathLimit} 
                         RETURN {edges : APPEND(path.edges, 
@@ -1070,7 +1086,7 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
                   movieId: {
                       description: "_id for a recommended Movie",
                       type: GraphQLString,
-                      defaultValue: "Movie/761"
+                      defaultValue: "Movie/82461"
                   },
                   pathLimit: {
                       description: "limit number of explanation  paths",
@@ -1083,13 +1099,21 @@ LET userRatedMovieKeys = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${u
                   const movieId = args.movieId == "" ? aql.literal(``) : aql.literal(` "${args.movieId}" `);
                   const pathLimit = args.pathLimit == 0 ? aql.literal(``) : aql.literal(` ${args.pathLimit} `);
                   return db._query(aql`
-                  WITH Movie, User
-                    FOR path IN INBOUND K_SHORTEST_PATHS ${movieId} TO ${userId} rates,  similarMovie_TFIDF_ML_Inference
-                    OPTIONS {
-                        weightAttribute: 'distance',
-                        defaultWeight: 1}
-                        LIMIT ${pathLimit}
-                        RETURN path
+                  WITH Movie User
+                    LET userRatedMoviePath = (FOR v, e, p IN 1 OUTBOUND ${userId} rates RETURN p)
+                    LET rated = userRatedMoviePath[*].vertices[1]._id //userRatedMovieKeys[*]._to
+                    LET ratedEdges = userRatedMoviePath[*].edges[0]
+                    LET moviesSimilarToRecommendedPath =
+                        (FOR movieID IN ratedEdges//userRatedMovieKeys
+                            FOR v,e,p IN 1..1 OUTBOUND ${movieId} similarMovie_TFIDF_ML_Inference
+                            LET compoundScore = e.score*movieID.rating/5.0
+                            SORT compoundScore DESC                
+                            RETURN DISTINCT p)
+                    LET similarMoviesRatedByUser = INTERSECTION (rated, UNIQUE(moviesSimilarToRecommendedPath[*].vertices[1]._id))
+                    FOR path IN UNION(userRatedMoviePath[* FILTER CURRENT.vertices[1]._id IN similarMoviesRatedByUser RETURN CURRENT], moviesSimilarToRecommendedPath[*] ) 
+                    LIMIT ${pathLimit} + 1
+                    RETURN path
+          
               `);
               }
           },
@@ -1159,23 +1183,30 @@ The query works as follows:
 Given a user, what movies are similar to the user's highest rated (topRatedLimit) movies and return the most similar movies the user has not rated.
 */
 
-LET userRatedMovies = (FOR ratingEdge IN rates FILTER ratingEdge._from == ${userId} SORT  ratingEdge.rating DESC RETURN PARSE_IDENTIFIER(ratingEdge._to).key)
-    FOR ratingEdge IN rates  
-    FILTER ratingEdge._from == ${userId}
-    SORT  ratingEdge.rating DESC 
-    LIMIT ${expansionLimit} 
-    FOR similarMovieEdge IN similarMovie_Embedding_Inference
-        FILTER similarMovieEdge._from == ratingEdge._to
-        LET similarMovie = similarMovieEdge._to
-        FILTER similarMovie NOT IN userRatedMovies //Don't recommend movies already rated
-        //compound score is user rating factor / distance - talk to data scientist on how to do this in amore scientific way
-        LET compoundScore = (ratingEdge.rating/5.0)/similarMovieEdge.distance
-        //Aggregate ratings for duplicate similar movies
-        COLLECT recommendedMovie = similarMovie AGGREGATE aggregateScore = MAX(compoundScore)
-        SORT aggregateScore DESC
-        FILTER DOCUMENT(recommendedMovie)!=null//Temp Work-around while determine cause of nulls
-        LIMIT  ${movieRecommendationLimit}
-        RETURN {movie : DOCUMENT(recommendedMovie) , score : aggregateScore}
+WITH Movie
+LET userRatedMovies = (
+    FOR ratingEdge IN rates 
+        FILTER ratingEdge._from == ${userId}
+        LIMIT ${expansionLimit}
+        SORT ratingEdge.rating DESC 
+    RETURN {id: ratingEdge._to, rating: ratingEdge.rating, }
+    )
+LET rated = userRatedMovies[*].id
+
+FOR movie IN userRatedMovies
+    FOR v,e,p IN 1..1 OUTBOUND movie.id similarMovie_Embedding_Inference
+        FILTER v._id NOT IN rated
+
+     //compound score is user rating factor / distance - talk to data scientist on how to do this in a more scientific way
+     LET compoundScore = (movie.rating/5.0)/e.distance
+
+     SORT compoundScore DESC
+
+     LIMIT ${movieRecommendationLimit}
+
+ RETURN {movie : v , score : compoundScore}
+
+
               `);
               }
           }
