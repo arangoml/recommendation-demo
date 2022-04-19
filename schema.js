@@ -944,7 +944,7 @@ Given a user, what movies are similar to the user's highest rated (topRatedLimit
 
 LET userRatedMovies = (
     FOR ratingEdge IN rates 
-       FILTER ratingEdge._from == ${userId }
+       FILTER ratingEdge._from == ${userId}
       RETURN ratingEdge._to
    ) 
   
@@ -1011,11 +1011,11 @@ LET userRatedMovies = (
         )
 
         LET rated = userRatedMovieKeys[*].id
-            FOR movieID IN userRatedMovieKeys
-                FOR v,e,p IN 1..1 OUTBOUND movieID.id similarMovie_TFIDF_ML_Inference
+            FOR movie IN userRatedMovieKeys
+                FOR v,e,p IN 1..1 OUTBOUND movie.id similarMovie_TFIDF_ML_Inference
                 FILTER v._id NOT IN rated
                 
-                LET compoundScore = e.score*movieID.rating/5.0
+                LET compoundScore = e.score*movie.rating/5.0
                 SORT compoundScore DESC
                 LIMIT ${movieRecommendationLimit} 
         RETURN {
@@ -1110,13 +1110,12 @@ LET userRatedMovies = (
                   )
           
                   LET rated = userRatedMovieKeys[*].id
-                  FOR movieID IN userRatedMovieKeys
-                          FOR v,e,p IN 1..1 OUTBOUND movieID.id similarMovie_TFIDF_ML_Inference
-                          FILTER v._id NOT IN rated
+                  FOR movie IN userRatedMovieKeys
+                          FOR v,e,p IN 1..1 OUTBOUND ${movieId} similarMovie_TFIDF_ML_Inference
 
-                          LET compoundScore = e.score*movieID.rating/5.0
+                          LET compoundScore = e.score*movie.rating/5.0
                           SORT compoundScore DESC
-                          LIMIT 20
+                          LIMIT ${pathLimit}
 
                   RETURN p
           
@@ -1197,11 +1196,11 @@ Given a user, what movies are similar to the user's highest rated (topRatedLimit
         )
 
         LET rated = userRatedMovieKeys[*].id
-            FOR movieID IN userRatedMovieKeys
-                FOR v,e,p IN 1..1 OUTBOUND movieID.id similarMovie_TFIDF_ML_Inference
+            FOR movie IN userRatedMovieKeys
+                FOR v,e,p IN 1..1 OUTBOUND movie.id similarMovie_TFIDF_ML_Inference
                 FILTER v._id NOT IN rated
                 
-                LET compoundScore = e.score*movieID.rating/5.0
+                LET compoundScore = e.score*movie.rating/5.0
                 SORT compoundScore DESC
                 LIMIT ${movieRecommendationLimit} 
         RETURN {
