@@ -1018,7 +1018,7 @@ LET userRatedMovies = (
                 COLLECT mov = v INTO g KEEP compoundScore
         
 RETURN {
-        movie:mov.title, 
+        movie:mov, 
         score: FIRST(g[*].compoundScore)
         }
 
