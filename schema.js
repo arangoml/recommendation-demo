@@ -857,7 +857,7 @@ var schema = new GraphQLSchema({
                   movieRecommendationLimit: {
                       description: "limit number of movies recommended",
                       type: GraphQLInt,
-                      defaultValue: 5
+                      defaultValue: 50
                   },
                   expansionLimit: {
                     description: "(not used in GNN query) limit number of users top rated movies considered",
@@ -871,8 +871,8 @@ var schema = new GraphQLSchema({
                   return db._query(aql`
 WITH Movie
 FOR v, e, p IN 1..1 OUTBOUND ${userId} ratesPrediction_gnn
-
-RETURN {
+LIMIT ${movieRecommendationLimit}
+RETURN DISTINCT {
     movie: v, 
     score: e.rating, 
     distance: 1/e.rating
@@ -959,12 +959,13 @@ LET userRatedMovies = (
        LET TFIDFscore = TFIDF(movieView)
        SORT TFIDFscore DESC 
        LIMIT ${movieRecommendationLimit}
+       COLLECT mov = movieView INTO g KEEP TFIDFscore
    
     RETURN {
-   movie: movieView, 
-   score : TFIDFscore, 
-   distance: 1/TFIDFscore
-   }
+        movie: mov, 
+        score : FIRST(g[*].TFIDFscore), 
+        distance: 1/FIRST(g[*].TFIDFscore)
+    }
   
               `);
               }
@@ -1001,24 +1002,26 @@ LET userRatedMovies = (
         */
 
         WITH Movie
-        LET userRatedMovieKeys = (
+        LET userRatedMovies = (
             FOR ratingEdge IN rates 
                 FILTER ratingEdge._from == ${userId}
         RETURN {id: ratingEdge._to, rating: ratingEdge.rating, }
         )
 
-        LET rated = userRatedMovieKeys[*].id
-            FOR movie IN userRatedMovieKeys
+        LET rated = userRatedMovies[*].id
+            FOR movie IN userRatedMovies
                 FOR v,e,p IN 1..1 OUTBOUND movie.id similarMovie_TFIDF_ML_Inference
                 FILTER v._id NOT IN rated
                 
                 LET compoundScore = e.score*movie.rating/5.0
                 SORT compoundScore DESC
                 LIMIT ${movieRecommendationLimit} 
-        RETURN {
-            movie : v, 
-            score : compoundScore
-            }
+                COLLECT mov = v INTO g KEEP compoundScore
+        
+RETURN {
+        movie:mov, 
+        score: FIRST(g[*].compoundScore)
+        }
 
               `);
               }
@@ -1204,8 +1207,12 @@ FOR movie IN userRatedMovies
 
      LIMIT ${movieRecommendationLimit}
 
- RETURN {movie : v , score : compoundScore}
-
+     COLLECT mov = v INTO g KEEP compoundScore
+        
+     RETURN {
+             movie:mov, 
+             score: FIRST(g[*].compoundScore)
+             }
 
               `);
               }
