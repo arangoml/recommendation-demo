@@ -857,7 +857,7 @@ var schema = new GraphQLSchema({
                   movieRecommendationLimit: {
                       description: "limit number of movies recommended",
                       type: GraphQLInt,
-                      defaultValue: 5
+                      defaultValue: 50
                   },
                   expansionLimit: {
                     description: "(not used in GNN query) limit number of users top rated movies considered",
@@ -871,7 +871,7 @@ var schema = new GraphQLSchema({
                   return db._query(aql`
 WITH Movie
 FOR v, e, p IN 1..1 OUTBOUND ${userId} ratesPrediction_gnn
-
+LIMIT ${movieRecommendationLimit}
 RETURN DISTINCT {
     movie: v, 
     score: e.rating, 
@@ -959,12 +959,13 @@ LET userRatedMovies = (
        LET TFIDFscore = TFIDF(movieView)
        SORT TFIDFscore DESC 
        LIMIT ${movieRecommendationLimit}
+       COLLECT mov = movieView INTO g KEEP TFIDFscore
    
-    RETURN DISTINCT{
-   movie: movieView, 
-   score : TFIDFscore, 
-   distance: 1/TFIDFscore
-   }
+    RETURN {
+        movie: mov, 
+        score : FIRST(g[*].TFIDFscore), 
+        distance: 1/FIRST(g[*].TFIDFscore)
+    }
   
               `);
               }
@@ -1206,8 +1207,12 @@ FOR movie IN userRatedMovies
 
      LIMIT ${movieRecommendationLimit}
 
- RETURN DISTINCT {movie : v , score : compoundScore}
-
+     COLLECT mov = v INTO g KEEP compoundScore
+        
+     RETURN {
+             movie:mov, 
+             score: FIRST(g[*].compoundScore)
+             }
 
               `);
               }
