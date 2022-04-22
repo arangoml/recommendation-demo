@@ -951,7 +951,7 @@ LET userRatedMovies = (
   
   FOR v,e,p IN 1..1 OUTBOUND ${userId} rates
         SORT e.rating DESC
-       LIMIT 10
+       //LIMIT 10
    FOR movieView IN MovieView 
        SEARCH ANALYZER(movieView.description IN TOKENS (v.description, 'text_en'), 'text_en') 
        FILTER movieView._id  NOT IN userRatedMovies //Don't recommend movies already rated 
@@ -995,7 +995,7 @@ LET userRatedMovies = (
                   const expansionLimit = args.expansionLimit == 0 ? aql.literal(``) : aql.literal(` ${args.expansionLimit} `);
                   const movieRecommendationLimit = args.movieRecommendationLimit == 0 ? aql.literal(``) : aql.literal(` ${args.movieRecommendationLimit} `);
                   return db._query(aql`
-        /*
+          /*
         This query uses the TFIDF inference computed using ML and transferred to ArangoDB in similarMovie_TFIDF_ML_Inference edge collection
         The query works as follows:
         Given a user, what movies are similar to the user's highest rated (topRatedLimit) movies and return the most similar movies the user has not rated.
@@ -1005,23 +1005,27 @@ LET userRatedMovies = (
         LET userRatedMovies = (
             FOR ratingEdge IN rates 
                 FILTER ratingEdge._from == ${userId}
-        RETURN {id: ratingEdge._to, rating: ratingEdge.rating, }
+        RETURN {id: ratingEdge._to, rating: ratingEdge.rating, distance : ratingEdge.distance}
         )
 
         LET rated = userRatedMovies[*].id
             FOR movie IN userRatedMovies
                 FOR v,e,p IN 1..1 OUTBOUND movie.id similarMovie_TFIDF_ML_Inference
                 FILTER v._id NOT IN rated
+                /* Compound Score combines the 
+                TFIDF similarity score between the User-rated movie to the candidate recommended movie 
+                and the User rating of the user rated Movie */
+                LET compoundScore = e.score + movie.rating
                 
-                LET compoundScore = e.score*movie.rating/5.0
                 SORT compoundScore DESC
                 LIMIT ${movieRecommendationLimit} 
                 COLLECT mov = v INTO g KEEP compoundScore
         
-RETURN {
-        movie:mov, 
-        score: FIRST(g[*].compoundScore)
-        }
+         RETURN {
+             movie:mov, 
+             score: FIRST(g[*].compoundScore),
+             distance : 1/FIRST(g[*].compoundScore)
+           }
 
               `);
               }
