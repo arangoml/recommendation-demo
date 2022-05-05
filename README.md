@@ -1,5 +1,33 @@
 GraphQL service for the ArangoML Movie Recomendations Demo
 
+Access the ArangoFlix demo site:
+
+<h2>Start the local site:</h2>
+
+`docker run -it -p 80:80 --name ArangoFlix arangoml/arangoflix:1.0`
+
+<h2>Click the following link:</h2>
+
+<a id="urlTag" href="" target="_blank">open</a>
+
+<h3>If you are prompted for credentials use the following</h3>
+
+**GraphQL Endpoint**: <a id="graphQLURLanchor" href="" target="_blank"><p id="graphQLURL"></p></a>
+
+**Username**: `arangoflix`
+
+**Password**: `arangoflix`
+
+<script>
+  document.getElementById("urlTag").innerHTML = ("http://localhost:80/?OasisURL=" +(window.location.href.split("/_db")[0] + window.arangoHelper.databaseUrl("") + "/ml-demo") + "&OasisUSERNAME=arangoflix&OasisPASSWORD=arangoflix")
+  document.getElementById("urlTag").href = ("http://localhost:80/?OasisURL=" +(window.location.href.split("/_db")[0] + window.arangoHelper.databaseUrl("") + "/ml-demo") + "&OasisUSERNAME=arangoflix&OasisPASSWORD=arangoflix")
+  
+
+
+  document.getElementById("graphQLURL").innerHTML = (window.location.href.split("/_db")[0] + window.arangoHelper.databaseUrl("") + "/ml-demo")
+  document.getElementById("graphQLURLanchor").href = (window.location.href.split("/_db")[0] + window.arangoHelper.databaseUrl("") + "/ml-demo")
+</script>
+
 # foxx
 
 `npm install`
@@ -7,6 +35,7 @@ GraphQL service for the ArangoML Movie Recomendations Demo
 zip entire folder to include `node_modules` folder
 
 OR with [foxx-cli](https://github.com/arangodb/foxx-cli)
+
 
 `foxx --server yourConfiguredServer install /your-desired-endpoint`
 
