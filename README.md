@@ -1,82 +1,25 @@
-GraphQL service for the ArangoML Movie Recomendations Demo
+# ArangoFlix GraphQL Endpoint
 
-Access the ArangoFlix demo site:
+GraphQL endpoint for the ArangoML Movie Recomendations Demo
 
-<h2>Start the local site:</h2>
+Access the full demo site from the Oasis Dashboard Examples by clicking the "Demo" button.
 
-`docker run -it -p 80:80 --name ArangoFlix arangoml/arangoflix:1.0`
-
-<h2>Click the following link:</h2>
-
-<a id="urlTag" href="" target="_blank">open</a>
-
-<h3>If you are prompted for credentials use the following</h3>
-
-**GraphQL Endpoint**: <a id="graphQLURLanchor" href="" target="_blank"><p id="graphQLURL"></p></a>
-
-**Username**: `arangoflix`
-
-**Password**: `arangoflix`
-
-<script>
-  document.getElementById("urlTag").innerHTML = ("http://localhost:80/?OasisURL=" +(window.location.href.split("/_db")[0] + window.arangoHelper.databaseUrl("") + "/ml-demo") + "&OasisUSERNAME=arangoflix&OasisPASSWORD=arangoflix")
-  document.getElementById("urlTag").href = ("http://localhost:80/?OasisURL=" +(window.location.href.split("/_db")[0] + window.arangoHelper.databaseUrl("") + "/ml-demo") + "&OasisUSERNAME=arangoflix&OasisPASSWORD=arangoflix")
-  
-
-
-  document.getElementById("graphQLURL").innerHTML = (window.location.href.split("/_db")[0] + window.arangoHelper.databaseUrl("") + "/ml-demo")
-  document.getElementById("graphQLURLanchor").href = (window.location.href.split("/_db")[0] + window.arangoHelper.databaseUrl("") + "/ml-demo")
-</script>
-
-# foxx
-
-`npm install`
-
-zip entire folder to include `node_modules` folder
-
-OR with [foxx-cli](https://github.com/arangodb/foxx-cli)
-
-
-`foxx --server yourConfiguredServer install /your-desired-endpoint`
-
-
-example query
+Example GraphQL query to recommend movies using Graph Neural Network inferences.
 ```
 query {
-  actorGraph(id: "Person/2911f9e2c86647e2fad007009b474dd8") {
-    vertices{
-      ... on Movie {
-      movieID: id
-      title
-    }
-    ... on Person {
-      personID: id
-      name
-    }
-      
-    }
-    edges {
+  recommendMoviesPredictionGNN (userId: "User/1", movieRecommendationLimit: 50, expansionLimit:100) {
+    movie {
       id
-      from
-      to
-      rev
-    }
-    path {
-    vertices{
-      ... on Movie {
-      movieID: id
       title
+      overview
     }
-    ... on Person {
-      personID: id
-      name
-    }      
-    }
-  }
-}
-  allMovies (limit: 2) {
-    id 
-    title
   }
 }
 ```
+Most queries follow a similar pattern, while some may benefit from lower limits. There are additional queries for data exploration such as `allMovies` but these are the main queries used for offering recommendations to a user.
+
+* `recommendMoviesCollaborativeFilteringAQL (userId: "User/1", movieRecommendationLimit: 50, expansionLimit:100)`
+* `recommendMoviesContentBasedAQL (userId: "User/1", movieRecommendationLimit: 50, expansionLimit:100)`
+* `recommendMoviesContentBasedML (userId: "User/1", movieRecommendationLimit: 50, expansionLimit:100)`
+* `recommendMoviesEmbeddingML (userId: "User/1", movieRecommendationLimit: 50, expansionLimit:100)`
+* `recommendMoviesPredictionGNN (userId: "User/1", movieRecommendationLimit: 50, expansionLimit:100)`

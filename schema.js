@@ -1221,7 +1221,7 @@ var schema = new GraphQLSchema({
                         SORT g[*].compoundScore DESC
                             
                         RETURN {
-                                movie:mov.title, 
+                                movie:mov, 
                                 score: FIRST(g[*].compoundScore)
                                 }
 
