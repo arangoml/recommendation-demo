@@ -23,3 +23,5 @@ Most queries follow a similar pattern, while some may benefit from lower limits.
 * `recommendMoviesContentBasedML (userId: "User/1", movieRecommendationLimit: 50, expansionLimit:100)`
 * `recommendMoviesEmbeddingML (userId: "User/1", movieRecommendationLimit: 50, expansionLimit:100)`
 * `recommendMoviesPredictionGNN (userId: "User/1", movieRecommendationLimit: 50, expansionLimit:100)`
+
+*Note `only for localhost`: If running on localhost and/or with authentication disabled you can access the graphql endpoint by click the `Show Interface` button. With the Demo UI running locally you will also need to supply your localhost username, password, and the GraphQL URL endpoint when navigating to the frontend demo site.* 
