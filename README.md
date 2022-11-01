@@ -1,5 +1,24 @@
 GraphQL service for the ArangoML Movie Recomendations Demo
 
+# ArangoDB Instance
+This assumes a running ArangoDB instance either with [ArangoGraph Cloud](https://cloud.arangodb.com/) or [download](https://www.arangodb.com/download/) and install locally.
+
+Once ArangoDB has been setup install the foxx service as described below. Then you can access the demo site as described in the "Start the local site" section.
+
+Note: The script tag below is fully shown in the markdown file but is properly loaded when the foxx service is installed.
+
+# foxx
+
+`npm install`
+
+zip entire folder to include `node_modules` folder
+
+OR with [foxx-cli](https://github.com/arangodb/foxx-cli)
+
+
+`foxx --server yourConfiguredServer install /your-desired-endpoint`
+
+
 Access the ArangoFlix demo site:
 
 <h2>Start the local site:</h2>
@@ -27,18 +46,6 @@ Access the ArangoFlix demo site:
   document.getElementById("graphQLURL").innerHTML = (window.location.href.split("/_db")[0] + window.arangoHelper.databaseUrl("") + "/ml-demo")
   document.getElementById("graphQLURLanchor").href = (window.location.href.split("/_db")[0] + window.arangoHelper.databaseUrl("") + "/ml-demo")
 </script>
-
-# foxx
-
-`npm install`
-
-zip entire folder to include `node_modules` folder
-
-OR with [foxx-cli](https://github.com/arangodb/foxx-cli)
-
-
-`foxx --server yourConfiguredServer install /your-desired-endpoint`
-
 
 example query
 ```
