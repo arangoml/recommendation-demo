@@ -1,17 +1,33 @@
 GraphQL service for the ArangoML Movie Recomendations Demo
 
+The following describes setting up the local environment for the ArangoFlix demo. However, this can be avoided by simply installing the demo via the Examples tab of any ArangoGraph Cloud deployment > [cloud.arangodb.com](cloud.arangodb.com/)
+
 # ArangoDB Instance
 This assumes a running ArangoDB instance either with [ArangoGraph Cloud](https://cloud.arangodb.com/) or [download](https://www.arangodb.com/download/) and install locally.
 
-Once ArangoDB has been setup install the foxx service as described below. Then you can access the demo site as described in the "Start the local site" section.
+Once ArangoDB has been setup you need to restore the data. 
+
+# Restoring the data
+Start by pulling the data from GitHub
+`git clone -b movie-data --single-branch https://github.com/arangodb/interactive_tutorials.git`
+
+Restore into your database, including system collections. This will depend on your specific setup but for example:
+```
+arangorestore --server.endpoint http:\\localhost:8529 --server.username root --server.password openSesame --create-database true --server.database IMDB --include-system-collections true --inpute-directory movie-knowledge-graph-dump-small
+```
+
+Once the data has been restored you can continue to the `foxx` section below and then the `Start the local site` section.
 
 Note: The script tag below is fully shown in the markdown file but is properly loaded when the foxx service is installed.
 
 # foxx
+Clone this repository and cd into `recommendation-demo`
 
 `npm install`
 
-zip entire folder to include `node_modules` folder
+zip entire folder including `node_modules` folder
+
+Navigate to the services tab of the recently resotred database and install the microservice.
 
 OR with [foxx-cli](https://github.com/arangodb/foxx-cli)
 
